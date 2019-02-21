@@ -19,7 +19,7 @@
 
 package org.apache.flink.ml.optimization
 
-import org.apache.flink.api.common.functions.MapFunction
+import org.apache.flink.api.common.functions.{MapFunction, RichGroupReduceFunction}
 import org.apache.flink.api.scala._
 import org.apache.flink.ml.common._
 import org.apache.flink.ml.math._
@@ -28,7 +28,11 @@ import org.apache.flink.ml.optimization.LearningRateMethod.LearningRateMethodTra
 import org.apache.flink.ml.optimization.Solver._
 import org.apache.flink.ml._
 import org.dma.sketchml._
+import org.dma.sketchml.ml.common.Constants
+import org.dma.sketchml.ml.conf.MLConf
 import org.dma.sketchml.ml.gradient.{DenseDoubleGradient, Gradient}
+import org.dma.sketchml.sketch.base.Quantizer
+import org.dma.sketchml.sketch.sketch.frequency.{GroupedMinMaxSketch, MinMaxSketch}
 
 
 /** Base class which performs Stochastic Gradient Descent optimization using mini batches.
@@ -101,6 +105,8 @@ class SketchGradientDescent extends IterativeSolver {
           learningRateMethod)
     }
   }
+
+
 
   def optimizeWithConvergenceCriterion(
                                         dataPoints: DataSet[LabeledVector],
@@ -210,11 +216,20 @@ class SketchGradientDescent extends IterativeSolver {
   : DataSet[WeightVector] = {
 
     data.mapWithBcVariable(currentWeights) {
-      (data, weightVector) => (lossFunction.gradient(data, weightVector)
+      (data, weightVector) => (lossFunction.gradient(data, weightVector))
     }.map(new mapToSketchMLGradient())
-      //TODO: Implement Compress
-      .reduce {
+      //Implement Compress
+      .map{
+      (previous) =>
+        (Gradient.compress(previous._1,MLConf(null,null,null,null,null,null,null,null,null,null,null,null,
+        Constants.GRADIENT_COMPRESSOR_SKETCH, Quantizer.DEFAULT_BIN_NUM,
+        GroupedMinMaxSketch.DEFAULT_MINMAXSKETCH_GROUP_NUM,
+        MinMaxSketch.DEFAULT_MINMAXSKETCH_ROW_NUM,
+        GroupedMinMaxSketch.DEFAULT_MINMAXSKETCH_COL_RATIO, 8)), previous._2)}
+
       //TODO: Implement Sum and Update
+      //.reduceGroup { new AggregateAndUpdateReducer() }
+      /*
       (left, right) =>
         val (leftGradVector, leftCount) = left
         val (rightGradVector, rightCount) = right
@@ -256,7 +271,7 @@ class SketchGradientDescent extends IterativeSolver {
           newWeights,
           weightVector.intercept - effectiveLearningRate * gradient.intercept)
       }
-    }
+    }*/
   }
 
   /** Calculates the new weights based on the gradient
@@ -298,6 +313,7 @@ class SketchGradientDescent extends IterativeSolver {
       lossCount => lossCount._1 / lossCount._2
     }
   }
+
 }
 
 
@@ -322,3 +338,4 @@ class mapToSketchMLGradient extends MapFunction[WeightVector, (Gradient,Double)]
     (sketchGradient,value.intercept)
   }
 }
+
