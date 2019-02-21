@@ -222,7 +222,7 @@ class SketchGradientDescent extends IterativeSolver {
       .reduceGroup(comressedGradientIter => {
         val dimension = 100
         var count = 0
-        var interceptCount = 0
+        var interceptCount = 0D
         val sumSketchGradients = new DenseDoubleGradient(dimension)
         comressedGradientIter.foreach(compressedGrad => {
           val gradient = compressedGrad._1
@@ -385,13 +385,11 @@ class changeFlinkGradientToSketchMLGradient extends MapFunction[WeightVector, (G
 
 class compressSketchGradient extends MapFunction[(Gradient, Double), (Gradient, Double)] {
   def map(value: (Gradient, Double)): (Gradient, Double) = {
-    (Gradient.compress(value._1, MLConf(null, null, null, null, null, null, null, null, null, null, null, null,
-      Constants.GRADIENT_COMPRESSOR_SKETCH, Quantizer.DEFAULT_BIN_NUM,
+    (Gradient.compress(value._1, MLConf( "","","",0,0,0D,0,0D,0D,0D,0D,0D, Constants.GRADIENT_COMPRESSOR_SKETCH, Quantizer.DEFAULT_BIN_NUM,
       GroupedMinMaxSketch.DEFAULT_MINMAXSKETCH_GROUP_NUM,
       MinMaxSketch.DEFAULT_MINMAXSKETCH_ROW_NUM,
       GroupedMinMaxSketch.DEFAULT_MINMAXSKETCH_COL_RATIO, 8)), value._2)
   }
 }
-
 
 
