@@ -19,6 +19,7 @@
 
 package org.apache.flink.ml.optimization
 
+import org.apache.flink.api.common.functions.MapFunction
 import org.apache.flink.api.scala._
 import org.apache.flink.ml.common._
 import org.apache.flink.ml.math._
@@ -26,6 +27,9 @@ import org.apache.flink.ml.optimization.IterativeSolver._
 import org.apache.flink.ml.optimization.LearningRateMethod.LearningRateMethodTrait
 import org.apache.flink.ml.optimization.Solver._
 import org.apache.flink.ml._
+import org.dma.sketchml._
+import org.dma.sketchml.ml.gradient.{DenseDoubleGradient, Gradient}
+
 
 /** Base class which performs Stochastic Gradient Descent optimization using mini batches.
   *
@@ -206,12 +210,11 @@ class SketchGradientDescent extends IterativeSolver {
   : DataSet[WeightVector] = {
 
     data.mapWithBcVariable(currentWeights) {
-      (data, weightVector) =>
-        val temp = lossFunction.gradient(data, weightVector)
-        print(temp + "\n")
-
-        (temp, 1)
-    }.reduce {
+      (data, weightVector) => (lossFunction.gradient(data, weightVector)
+    }.map(new mapToSketchMLGradient())
+      //TODO: Implement Compress
+      .reduce {
+      //TODO: Implement Sum and Update
       (left, right) =>
         val (leftGradVector, leftCount) = left
         val (rightGradVector, rightCount) = right
@@ -303,4 +306,19 @@ class SketchGradientDescent extends IterativeSolver {
   */
 object SketchGradientDescent {
   def apply() = new SketchGradientDescent
+}
+
+class mapToSketchMLGradient extends MapFunction[WeightVector, (Gradient,Double)]{
+  def map(value: WeightVector): (Gradient,Double) = {
+
+    val result = value.weights match {
+      case d: DenseVector => d
+      case s: SparseVector => s.toDenseVector
+    }
+    val sketchGradient = new DenseDoubleGradient(result.size)
+    for (r <- result){
+      sketchGradient.values :+ r._2
+    }
+    (sketchGradient,value.intercept)
+  }
 }
