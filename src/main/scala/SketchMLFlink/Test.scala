@@ -30,7 +30,7 @@ object Test {
         val testingDS : DataSet[Vector] = astroTestingDS.map(lv => lv.vector)*/
 
 
-    val dataSet: DataSet[LabeledVector] = MLUtils.readLibSVM(env, "/home/batuhan/Downloads/kddb/kddb.t").first(100)
+    val dataSet: DataSet[LabeledVector] = MLUtils.readLibSVM(env, params.get("inputPath")).first(100)
     val trainTestData = Splitter.trainTestSplit(dataSet,0.5)
     val trainingDS: DataSet[LabeledVector] = trainTestData.training
     val testingDS = trainTestData.testing.map(lv => (lv.vector, lv.label))
@@ -40,7 +40,7 @@ object Test {
     //val predictions: DataSet[(Vector,Double)] = mlr.predict(testingDS)
 
     val evaluationPairs: DataSet[(Double, Double)] = mlr.evaluate(testingDS)
-    evaluationPairs.writeAsText("file:///home/batuhan/Downloads/kddb/test.txt", WriteMode.OVERWRITE).setParallelism(1)
+    evaluationPairs.writeAsText(params.get("outputPath"), WriteMode.OVERWRITE).setParallelism(1)
 
 
 //    val absoluteErrorSum = evaluationPairs.collect().map{

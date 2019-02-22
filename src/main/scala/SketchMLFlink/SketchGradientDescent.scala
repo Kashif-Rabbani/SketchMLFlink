@@ -214,28 +214,49 @@ class SketchGradientDescent extends IterativeSolver {
                        learningRateMethod: LearningRateMethodTrait)
   : DataSet[WeightVector] = {
 
-    data.mapWithBcVariable(currentWeights) { (data, weightVector) => (lossFunction.gradient(data, weightVector)) }
+    data.mapWithBcVariable(currentWeights) { (data, weightVector) =>
+      lossFunction.gradient(data, weightVector);
+    }.map(value => {
+
+      val result = value.weights match {
+        case d: DenseVector => d
+        case s: SparseVector => s.toDenseVector
+      }
+
+      val sketchGradient = new DenseDoubleGradient(result.size, result.data)
+      (sketchGradient, value.intercept)
+    }).map( value => {
+      val compressedGradient =  Gradient.compress(value._1, MLConf( Constants.ML_LINEAR_REGRESSION, "", Constants.FORMAT_LIBSVM, 1,1,
+        1D,1,1D,1D, 1D, 1D, 1D,
+        Constants.GRADIENT_COMPRESSOR_SKETCH, Quantizer.DEFAULT_BIN_NUM,
+        GroupedMinMaxSketch.DEFAULT_MINMAXSKETCH_GROUP_NUM,
+        MinMaxSketch.DEFAULT_MINMAXSKETCH_ROW_NUM,
+        GroupedMinMaxSketch.DEFAULT_MINMAXSKETCH_COL_RATIO, 8))
+      (compressedGradient, value._2)
+    })
       //Map Flink Gradient to SketchML Gradient
-      .map(new changeFlinkGradientToSketchMLGradient())
+      //.map(new changeFlinkGradientToSketchMLGradient())
       //Compress SketchML Gradient
-      .map(new compressSketchGradient())
-      .reduceGroup(comressedGradientIter => {
-        val dimension = 100
-        var count = 0
-        var interceptCount = 0D
-        val sumSketchGradients = new DenseDoubleGradient(dimension)
-        comressedGradientIter.foreach(compressedGrad => {
-          val gradient = compressedGrad._1
-          val intercept = compressedGrad._2
-          interceptCount += intercept
-          sumSketchGradients.plusBy(gradient)
-          sumSketchGradients.toAuto
-          count += 1
-        })
-        val flinkVector = new DenseVector(sumSketchGradients.values).toSparseVector
-        val flinkGradient = WeightVector(flinkVector, interceptCount)
-        (flinkGradient, count)
-      }).mapWithBcVariableIteration(currentWeights) {
+      // .map(new compressSketchGradient())
+      .reduceGroup(compressedGradientIter => {
+      print("Print inside reduceGroup")
+      print(compressedGradientIter)
+      val dimension =  2990384
+      var count = 0
+      var interceptCount = 0D
+      val sumSketchGradients = new DenseDoubleGradient(dimension)
+      compressedGradientIter.foreach(compressedGrad => {
+        val gradient = compressedGrad._1
+        val intercept = compressedGrad._2
+        interceptCount += intercept
+        sumSketchGradients.plusBy(gradient)
+        sumSketchGradients.toAuto
+        count += 1
+      })
+      val flinkVector = new DenseVector(sumSketchGradients.values).toSparseVector
+      val flinkGradient = WeightVector(flinkVector, interceptCount)
+      (flinkGradient, count)
+    }).mapWithBcVariableIteration(currentWeights) {
       (gradientCount, weightVector, iteration) => {
         val (WeightVector(weights, intercept), count) = gradientCount
 
@@ -360,7 +381,6 @@ object SketchGradientDescent {
 
 class changeFlinkGradientToSketchMLGradient extends MapFunction[WeightVector, (Gradient, Double)] {
   def map(value: WeightVector): (Gradient, Double) = {
-
     val result = value.weights match {
       case d: DenseVector => d
       case s: SparseVector => s.toDenseVector
@@ -385,11 +405,10 @@ class changeFlinkGradientToSketchMLGradient extends MapFunction[WeightVector, (G
 
 class compressSketchGradient extends MapFunction[(Gradient, Double), (Gradient, Double)] {
   def map(value: (Gradient, Double)): (Gradient, Double) = {
-    (Gradient.compress(value._1, MLConf( "","","",0,0,0D,0,0D,0D,0D,0D,0D, Constants.GRADIENT_COMPRESSOR_SKETCH, Quantizer.DEFAULT_BIN_NUM,
+    (Gradient.compress(value._1, MLConf("", "", "", 1, 1, 1D, 1, 1D, 1D, 1D, 1D, 1D, Constants.GRADIENT_COMPRESSOR_SKETCH, Quantizer.DEFAULT_BIN_NUM,
       GroupedMinMaxSketch.DEFAULT_MINMAXSKETCH_GROUP_NUM,
       MinMaxSketch.DEFAULT_MINMAXSKETCH_ROW_NUM,
       GroupedMinMaxSketch.DEFAULT_MINMAXSKETCH_COL_RATIO, 8)), value._2)
   }
 }
-
 
