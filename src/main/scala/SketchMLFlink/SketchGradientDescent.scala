@@ -222,111 +222,135 @@ class SketchGradientDescent extends IterativeSolver {
         case d: DenseVector => d
         case s: SparseVector => s.toDenseVector
       }
-
       val sketchGradient = new DenseDoubleGradient(result.size, result.data)
       (sketchGradient, value.intercept)
-    }).map( value => {
-      val compressedGradient =  Gradient.compress(value._1, MLConf( Constants.ML_LINEAR_REGRESSION, "", Constants.FORMAT_LIBSVM, 1,1,
-        1D,1,1D,1D, 1D, 1D, 1D,
-        Constants.GRADIENT_COMPRESSOR_SKETCH, Quantizer.DEFAULT_BIN_NUM,
-        GroupedMinMaxSketch.DEFAULT_MINMAXSKETCH_GROUP_NUM,
-        MinMaxSketch.DEFAULT_MINMAXSKETCH_ROW_NUM,
-        GroupedMinMaxSketch.DEFAULT_MINMAXSKETCH_COL_RATIO, 8))
-      (compressedGradient, value._2)
     })
-      //Map Flink Gradient to SketchML Gradient
-      //.map(new changeFlinkGradientToSketchMLGradient())
-      //Compress SketchML Gradient
-      // .map(new compressSketchGradient())
-      .reduceGroup(compressedGradientIter => {
-      print("Print inside reduceGroup")
-      print(compressedGradientIter)
-      val dimension =  2990384
-      var count = 0
-      var interceptCount = 0D
-      val sumSketchGradients = new DenseDoubleGradient(dimension)
-      compressedGradientIter.foreach(compressedGrad => {
-        val gradient = compressedGrad._1
-        val intercept = compressedGrad._2
-        interceptCount += intercept
-        sumSketchGradients.plusBy(gradient)
-        sumSketchGradients.toAuto
-        count += 1
+      .map(value => {
+        val compressedGradient = Gradient.compress(value._1, MLConf(Constants.ML_LINEAR_REGRESSION, "", Constants.FORMAT_LIBSVM, 1, 1,
+          1D, 1, 1D, 1D, 1D, 1D, 1D,
+          Constants.GRADIENT_COMPRESSOR_SKETCH, Quantizer.DEFAULT_BIN_NUM,
+          GroupedMinMaxSketch.DEFAULT_MINMAXSKETCH_GROUP_NUM,
+          MinMaxSketch.DEFAULT_MINMAXSKETCH_ROW_NUM,
+          GroupedMinMaxSketch.DEFAULT_MINMAXSKETCH_COL_RATIO, 8))
+        (compressedGradient, value._2, 1)
       })
-      val flinkVector = new DenseVector(sumSketchGradients.values).toSparseVector
-      val flinkGradient = WeightVector(flinkVector, interceptCount)
-      (flinkGradient, count)
-    }).mapWithBcVariableIteration(currentWeights) {
-      (gradientCount, weightVector, iteration) => {
-        val (WeightVector(weights, intercept), count) = gradientCount
+      .reduceGroup(iterator => {
+        var result: DenseVector = null
+        var sumCount: Int = 0
+        var sumIntercept = 0D
+        if (iterator.hasNext) {
+          val (gradVector, intercept, count) = iterator.next()
+          val flinkVector = new DenseVector(gradVector.toDense.values)
+          val flinkGradient = WeightVector(flinkVector, intercept)
+          sumCount += count
+          sumIntercept += intercept
 
-        BLAS.scal(1.0 / count, weights)
-
-        val gradient = WeightVector(weights, intercept / count)
-        val effectiveLearningRate = learningRateMethod.calculateLearningRate(
-          learningRate,
-          iteration,
-          regularizationConstant)
-
-        val newWeights = takeStep(
-          weightVector.weights,
-          gradient.weights,
-          regularizationPenalty,
-          regularizationConstant,
-          effectiveLearningRate)
-
-        WeightVector(
-          newWeights,
-          weightVector.intercept - effectiveLearningRate * gradient.intercept)
-      }
-
-
-
-      //.reduceGroup { new AggregateAndUpdateReducer() }
-      /*
-      (left, right) =>
-        val (leftGradVector, leftCount) = left
-        val (rightGradVector, rightCount) = right
-
-        // make the left gradient dense so that the following reduce operations (left fold) reuse
-        // it. This strongly depends on the underlying implementation of the ReduceDriver which
-        // always passes the new input element as the second parameter
-        val result = leftGradVector.weights match {
-          case d: DenseVector => d
-          case s: SparseVector => s.toDenseVector
+          result = flinkGradient.weights match {
+            case d: DenseVector => d
+            case s: SparseVector => s.toDenseVector
+          }
         }
-
-        // Add the right gradient to the result
-        BLAS.axpy(1.0, rightGradVector.weights, result)
-        val gradients = WeightVector(
-          result, leftGradVector.intercept + rightGradVector.intercept)
-
-        (gradients, leftCount + rightCount)
-    }.mapWithBcVariableIteration(currentWeights) {
-      (gradientCount, weightVector, iteration) => {
-        val (WeightVector(weights, intercept), count) = gradientCount
-
-        BLAS.scal(1.0 / count, weights)
-
-        val gradient = WeightVector(weights, intercept / count)
-        val effectiveLearningRate = learningRateMethod.calculateLearningRate(
-          learningRate,
-          iteration,
-          regularizationConstant)
-
-        val newWeights = takeStep(
-          weightVector.weights,
-          gradient.weights,
-          regularizationPenalty,
-          regularizationConstant,
-          effectiveLearningRate)
-
-        WeightVector(
-          newWeights,
-          weightVector.intercept - effectiveLearningRate * gradient.intercept)
+        while (iterator.hasNext) {
+          val (gradVector, intercept, count) = iterator.next()
+          val flinkVector = new DenseVector(gradVector.toDense.values)
+          val flinkGradient = WeightVector(flinkVector, intercept)
+          BLAS.axpy(1.0, flinkGradient.weights, result)
+          sumCount += count
+          sumIntercept += intercept
+        }
+        val gradients = WeightVector(result, sumIntercept)
+        (gradients, sumCount)
       }
-    }*/
+      )
+      .mapWithBcVariableIteration(currentWeights) {
+        (gradientCount, weightVector, iteration) => {
+          val (WeightVector(weights, intercept), count) = gradientCount
+
+          BLAS.scal(1.0 / count, weights)
+
+          val gradient = WeightVector(weights, intercept / count)
+          val effectiveLearningRate = learningRateMethod.calculateLearningRate(
+            learningRate,
+            iteration,
+            regularizationConstant)
+
+          val newWeights = takeStep(
+            weightVector.weights,
+            gradient.weights,
+            regularizationPenalty,
+            regularizationConstant,
+            effectiveLearningRate)
+
+          WeightVector(
+            newWeights,
+            weightVector.intercept - effectiveLearningRate * gradient.intercept)
+        }
+      }
+
+    /*      .reduceGroup(compressedGradientAndInterceptIter => {
+          val dimension = 2990384
+          var count = 0
+          var interceptCount = 0D
+          val sumSketchGradients = new DenseDoubleGradient(dimension)
+
+          compressedGradientAndInterceptIter.foreach(compressedGrad => {
+            val gradient = compressedGrad._1
+            val intercept = compressedGrad._2
+            interceptCount += intercept
+            sumSketchGradients.plusBy(gradient)
+            count += 1
+          })
+          sumSketchGradients.toAuto
+          val flinkVector = new DenseVector(sumSketchGradients.values).toSparseVector
+          val flinkGradient = WeightVector(flinkVector, interceptCount)
+          (flinkGradient, count)
+        })*/
+
+
+    /*
+    .reduce{
+    (left, right) =>
+      val (leftGradVector, leftCount) = left
+      val (rightGradVector, rightCount) = right
+
+      // make the left gradient dense so that the following reduce operations (left fold) reuse
+      // it. This strongly depends on the underlying implementation of the ReduceDriver which
+      // always passes the new input element as the second parameter
+      val result = leftGradVector.weights match {
+        case d: DenseVector => d
+        case s: SparseVector => s.toDenseVector
+      }
+
+      // Add the right gradient to the result
+      BLAS.axpy(1.0, rightGradVector.weights, result)
+      val gradients = WeightVector(
+        result, leftGradVector.intercept + rightGradVector.intercept)
+
+      (gradients, leftCount + rightCount)
+  }.mapWithBcVariableIteration(currentWeights) {
+    (gradientCount, weightVector, iteration) => {
+      val (WeightVector(weights, intercept), count) = gradientCount
+
+      BLAS.scal(1.0 / count, weights)
+
+      val gradient = WeightVector(weights, intercept / count)
+      val effectiveLearningRate = learningRateMethod.calculateLearningRate(
+        learningRate,
+        iteration,
+        regularizationConstant)
+
+      val newWeights = takeStep(
+        weightVector.weights,
+        gradient.weights,
+        regularizationPenalty,
+        regularizationConstant,
+        effectiveLearningRate)
+
+      WeightVector(
+        newWeights,
+        weightVector.intercept - effectiveLearningRate * gradient.intercept)
     }
+  }*/
   }
 
   /** Calculates the new weights based on the gradient
@@ -403,12 +427,12 @@ class changeFlinkGradientToSketchMLGradient extends MapFunction[WeightVector, (G
   }
 }*/
 
-class compressSketchGradient extends MapFunction[(Gradient, Double), (Gradient, Double)] {
+/*class compressSketchGradient extends MapFunction[(Gradient, Double), (Gradient, Double)] {
   def map(value: (Gradient, Double)): (Gradient, Double) = {
     (Gradient.compress(value._1, MLConf("", "", "", 1, 1, 1D, 1, 1D, 1D, 1D, 1D, 1D, Constants.GRADIENT_COMPRESSOR_SKETCH, Quantizer.DEFAULT_BIN_NUM,
       GroupedMinMaxSketch.DEFAULT_MINMAXSKETCH_GROUP_NUM,
       MinMaxSketch.DEFAULT_MINMAXSKETCH_ROW_NUM,
       GroupedMinMaxSketch.DEFAULT_MINMAXSKETCH_COL_RATIO, 8)), value._2)
   }
-}
+}*/
 
