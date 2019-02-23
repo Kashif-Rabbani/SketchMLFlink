@@ -1,4 +1,4 @@
-package SketchMLFlink
+package de.tub.dima.bdapro.sketchml.flink
 
 import org.apache.flink.api.java.utils.ParameterTool
 import org.apache.flink.api.scala._
@@ -7,6 +7,7 @@ import org.apache.flink.ml.MLUtils
 import org.apache.flink.ml.common.LabeledVector
 import org.apache.flink.ml.preprocessing.Splitter
 import org.apache.flink.ml.regression.SketchMultipleLinearRegression
+
 
 object Test {
   def main(args: Array[String]): Unit = {

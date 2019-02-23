@@ -92,7 +92,7 @@ import org.apache.flink.ml.pipeline.{PredictOperation, FitOperation, Predictor}
   */
 class SketchMultipleLinearRegression extends Predictor[SketchMultipleLinearRegression] {
   import org.apache.flink.ml._
-  import MultipleLinearRegression._
+  import org.apache.flink.ml.regression.MultipleLinearRegression._
 
   // Stores the weights of the linear model after the fitting phase
   var weightsOption: Option[DataSet[WeightVector]] = None

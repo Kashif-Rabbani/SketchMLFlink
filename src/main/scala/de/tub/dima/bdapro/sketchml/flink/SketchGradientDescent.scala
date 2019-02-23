@@ -27,7 +27,6 @@ import org.apache.flink.ml.optimization.IterativeSolver._
 import org.apache.flink.ml.optimization.LearningRateMethod.LearningRateMethodTrait
 import org.apache.flink.ml.optimization.Solver._
 import org.apache.flink.ml._
-import org.dma.sketchml._
 import org.dma.sketchml.ml.common.Constants
 import org.dma.sketchml.ml.conf.MLConf
 import org.dma.sketchml.ml.gradient.{DenseDoubleGradient, Gradient}
@@ -45,15 +44,15 @@ import org.dma.sketchml.sketch.sketch.frequency.{GroupedMinMaxSketch, MinMaxSket
   * descent. Once a sampling operator has been introduced, the algorithm can be optimized
   *
   * The parameters to tune the algorithm are:
-  * [[Solver.LossFunction]] for the loss function to be used,
-  * [[Solver.RegularizationPenaltyValue]] for the regularization penalty.
-  * [[Solver.RegularizationConstant]] for the regularization parameter,
-  * [[IterativeSolver.Iterations]] for the maximum number of iteration,
-  * [[IterativeSolver.LearningRate]] for the learning rate used.
-  * [[IterativeSolver.ConvergenceThreshold]] when provided the algorithm will
+  * [[LossFunction]] for the loss function to be used,
+  * [[RegularizationPenaltyValue]] for the regularization penalty.
+  * [[RegularizationConstant]] for the regularization parameter,
+  * [[Iterations]] for the maximum number of iteration,
+  * [[LearningRate]] for the learning rate used.
+  * [[ConvergenceThreshold]] when provided the algorithm will
   * stop the iterations if the relative change in the value of the objective
   * function between successive iterations is is smaller than this value.
-  * [[IterativeSolver.LearningRateMethodValue]] determines functional form of
+  * [[LearningRateMethodValue]] determines functional form of
   * effective learning rate.
   */
 class SketchGradientDescent extends IterativeSolver {
@@ -205,7 +204,7 @@ class SketchGradientDescent extends IterativeSolver {
     * @return A Dataset containing the weights after one stochastic gradient descent step
     */
   private def SGDStep(
-                       data: DataSet[(LabeledVector)],
+                       data: DataSet[LabeledVector],
                        currentWeights: DataSet[WeightVector],
                        lossFunction: LossFunction,
                        regularizationPenalty: RegularizationPenalty,
