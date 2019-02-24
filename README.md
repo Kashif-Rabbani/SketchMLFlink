@@ -1,8 +1,8 @@
-##SketchML - Flink 
+## SketchML - Flink 
 
 This is a BDAPRO project
 
-#Some important Notes
+# Some important Notes
 
 - Spark (ML) and Flink has incopatibility issues with scala implementations.
 - SketchML and Flink can use Scala 2.11.12
