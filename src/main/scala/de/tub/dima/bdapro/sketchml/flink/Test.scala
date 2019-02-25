@@ -31,12 +31,16 @@ object Test {
         val testingDS : DataSet[Vector] = astroTestingDS.map(lv => lv.vector)*/
 
 
-    val dataSet: DataSet[LabeledVector] = MLUtils.readLibSVM(env, params.get("inputPath")).first(100)
-    val trainTestData = Splitter.trainTestSplit(dataSet,0.5)
+    val trainingDS: DataSet[LabeledVector] = MLUtils.readLibSVM(env, params.get("inputTrain"))
+    val astroTestingDS: DataSet[LabeledVector] = MLUtils.readLibSVM(env, params.get("inputTest"))
+    val testingDS = astroTestingDS.map(lv => (lv.vector, lv.label))
+
+/*    val trainTestData = Splitter.trainTestSplit(dataSet,0.5)
     val trainingDS: DataSet[LabeledVector] = trainTestData.training
-    val testingDS = trainTestData.testing.map(lv => (lv.vector, lv.label))
+    val testingDS = trainTestData.testing.map(lv => (lv.vector, lv.label))*/
 
     mlr.fit(trainingDS)
+
     // Calculate the predictions for the test data
     //val predictions: DataSet[(Vector,Double)] = mlr.predict(testingDS)
 
