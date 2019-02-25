@@ -16,17 +16,18 @@
  * limitations under the License.
  */
 
+
 package org.apache.flink.ml.regression
 
 import org.apache.flink.api.scala.DataSet
 import org.apache.flink.ml.math.{Breeze, Vector}
 import org.apache.flink.ml.common._
-
 import org.apache.flink.api.scala._
 import org.apache.flink.ml.optimization.LearningRateMethod.LearningRateMethodTrait
-
 import org.apache.flink.ml.optimization._
-import org.apache.flink.ml.pipeline.{PredictOperation, FitOperation, Predictor}
+import org.apache.flink.ml.pipeline.{FitOperation, PredictOperation, Predictor}
+
+
 
 
 /** Multiple linear regression using the ordinary least squares (OLS) estimator.
@@ -90,30 +91,31 @@ import org.apache.flink.ml.pipeline.{PredictOperation, FitOperation, Predictor}
   *  [[LearningRateMethod]] for all supported methods.
   *
   */
-class SketchMultipleLinearRegression extends Predictor[SketchMultipleLinearRegression] {
+class FlinkMultipleLinearRegression extends Predictor[FlinkMultipleLinearRegression] {
   import org.apache.flink.ml._
-  import SketchMultipleLinearRegression._
+  import FlinkMultipleLinearRegression._
 
   // Stores the weights of the linear model after the fitting phase
   var weightsOption: Option[DataSet[WeightVector]] = None
 
-  def setIterations(iterations: Int): SketchMultipleLinearRegression = {
+  def setIterations(iterations: Int): FlinkMultipleLinearRegression = {
     parameters.add(Iterations, iterations)
     this
   }
 
-  def setStepsize(stepsize: Double): SketchMultipleLinearRegression = {
+  def setStepsize(stepsize: Double): FlinkMultipleLinearRegression = {
     parameters.add(Stepsize, stepsize)
     this
   }
 
-  def setConvergenceThreshold(convergenceThreshold: Double): SketchMultipleLinearRegression = {
+  def setConvergenceThreshold(convergenceThreshold: Double): FlinkMultipleLinearRegression = {
     parameters.add(ConvergenceThreshold, convergenceThreshold)
     this
   }
 
-  def setLearningRateMethod(learningRateMethod: LearningRateMethodTrait)
-  : SketchMultipleLinearRegression = {
+  def setLearningRateMethod(
+      learningRateMethod: LearningRateMethodTrait)
+    : FlinkMultipleLinearRegression = {
     parameters.add(LearningRateMethodValue, learningRateMethod)
     this
   }
@@ -137,7 +139,7 @@ class SketchMultipleLinearRegression extends Predictor[SketchMultipleLinearRegre
   }
 }
 
-object SketchMultipleLinearRegression {
+object FlinkMultipleLinearRegression {
 
   val WEIGHTVECTOR_BROADCAST = "weights_broadcast"
 
@@ -163,19 +165,19 @@ object SketchMultipleLinearRegression {
 
   // ======================================== Factory methods ======================================
 
-  def apply(): SketchMultipleLinearRegression = {
-    new SketchMultipleLinearRegression()
+  def apply(): FlinkMultipleLinearRegression = {
+    new FlinkMultipleLinearRegression()
   }
 
   // ====================================== Operations =============================================
 
   /** Trains the linear model to fit the training data. The resulting weight vector is stored in
-    * the [[MultipleLinearRegression]] instance.
+    * the [[FlinkMultipleLinearRegression]] instance.
     *
     */
-  implicit val fitMLR = new FitOperation[SketchMultipleLinearRegression, LabeledVector] {
+  implicit val fitMLR = new FitOperation[FlinkMultipleLinearRegression, LabeledVector] {
     override def fit(
-                      instance: SketchMultipleLinearRegression,
+                      instance: FlinkMultipleLinearRegression,
                       fitParameters: ParameterMap,
                       input: DataSet[LabeledVector])
     : Unit = {
@@ -189,7 +191,7 @@ object SketchMultipleLinearRegression {
 
       val lossFunction = GenericLossFunction(SquaredLoss, LinearPrediction)
 
-      val optimizer = SketchGradientDescent()
+      val optimizer = FlinkGradientDescent()
         .setIterations(numberOfIterations)
         .setStepsize(stepsize)
         .setLossFunction(lossFunction)
@@ -209,9 +211,9 @@ object SketchMultipleLinearRegression {
   }
 
   implicit def predictVectors[T <: Vector] = {
-    new PredictOperation[SketchMultipleLinearRegression, WeightVector, T, Double]() {
-      override def getModel(self: SketchMultipleLinearRegression, predictParameters: ParameterMap)
-      : DataSet[WeightVector] = {
+    new PredictOperation[FlinkMultipleLinearRegression, WeightVector, T, Double]() {
+      override def getModel(self: FlinkMultipleLinearRegression, predictParameters: ParameterMap)
+        : DataSet[WeightVector] = {
         self.weightsOption match {
           case Some(weights) => weights
 
