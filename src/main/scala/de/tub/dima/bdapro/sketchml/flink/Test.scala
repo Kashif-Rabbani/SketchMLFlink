@@ -1,4 +1,5 @@
-package org.dma.sketchml.flink
+
+package de.tub.dima.bdapro.sketchml.flink
 
 import org.apache.flink.api.java.utils.ParameterTool
 import org.apache.flink.api.scala._
@@ -27,17 +28,20 @@ object Test {
         val testingDS : DataSet[Vector] = astroTestingDS.map(lv => lv.vector)*/
 
 
-    val dataSet: DataSet[LabeledVector] = MLUtils.readLibSVM(env, params.get("inputTrain")).first(10)
-    val trainTestData = Splitter.trainTestSplit(dataSet, 0.75)
+    val dataSet: DataSet[LabeledVector] = MLUtils.readLibSVM(env, params.get("inputTrain"))
+    val trainTestData = Splitter.trainTestSplit(dataSet, 0.5)
     val trainingDS: DataSet[LabeledVector] = trainTestData.training
     val testingDS = trainTestData.testing.map(lv => (lv.vector, lv.label))
+
+
 
     // parameter "Sketch" will run SGD with compression
     if (params.get("sketchOrFlink") == "Sketch") {
       val mlr = SketchMultipleLinearRegression()
         .setIterations(params.get("iterations").toInt)
         .setStepsize(params.get("stepSize").toDouble)
-        .setConvergenceThreshold(params.get("threshold").toDouble)
+          .setCompression(params.get("compressionType"))
+        //.setConvergenceThreshold(params.get("threshold").toDouble)
 
       mlr.fit(trainingDS)
 
@@ -54,7 +58,7 @@ object Test {
       val mlr = FlinkMultipleLinearRegression()
         .setIterations(params.get("iterations").toInt)
         .setStepsize(params.get("stepSize").toDouble)
-        .setConvergenceThreshold(params.get("threshold").toDouble)
+       // .setConvergenceThreshold(params.get("threshold").toDouble)
 
       mlr.fit(trainingDS)
       // Calculate the predictions for the test data
