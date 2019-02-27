@@ -65,7 +65,7 @@ class SketchGradientDescent extends IterativeSolver {
   private val logger: Logger = LoggerFactory.getLogger(SketchGradientDescent.getClass)
   private var totalTimeToTrack = 0.0
   private var globalNumberOfIterations: Int = parameters(Iterations)
-  private var compressionType = parameters(CompressionType)
+  private var compressionType:String = _
 
   /** Provides a solution for the given optimization problem
     *
@@ -79,6 +79,7 @@ class SketchGradientDescent extends IterativeSolver {
 
     val numberOfIterations: Int = parameters(Iterations)
     globalNumberOfIterations = numberOfIterations
+    compressionType = parameters(CompressionType) //Sketch by default
     val convergenceThresholdOption: Option[Double] = parameters.get(ConvergenceThreshold)
     val lossFunction = parameters(LossFunction)
     val learningRate = parameters(LearningRate)
@@ -234,7 +235,7 @@ class SketchGradientDescent extends IterativeSolver {
         case s: SparseVector => s.toDenseVector
       }
       val sketchGradient = new DenseDoubleGradient(result.size, result.data)
-      (sketchGradient, value.intercept)
+      //(sketchGradient, value.intercept)
       /* var sketchGradient: Gradient = null
 
        var data: Array[Double] = value.weights match {
@@ -273,8 +274,15 @@ class SketchGradientDescent extends IterativeSolver {
          }
        }
        (sketchGradient, value.intercept)*/
+      val compressedGradient = Gradient.compress(sketchGradient, MLConf(Constants.ML_LINEAR_REGRESSION, "", Constants.FORMAT_LIBSVM, 1, 1,
+        1D, 1, 1D, 1D, 1D, 1D, 1D,
+        compressionType, Quantizer.DEFAULT_BIN_NUM,
+        GroupedMinMaxSketch.DEFAULT_MINMAXSKETCH_GROUP_NUM,
+        MinMaxSketch.DEFAULT_MINMAXSKETCH_ROW_NUM,
+        GroupedMinMaxSketch.DEFAULT_MINMAXSKETCH_COL_RATIO, 8))
+      (compressedGradient, value.intercept, 1)
     })
-      .map(value => {
+/*      .map(value => {
         val compressedGradient = Gradient.compress(value._1, MLConf(Constants.ML_LINEAR_REGRESSION, "", Constants.FORMAT_LIBSVM, 1, 1,
           1D, 1, 1D, 1D, 1D, 1D, 1D,
           compressionType, Quantizer.DEFAULT_BIN_NUM,
@@ -282,7 +290,7 @@ class SketchGradientDescent extends IterativeSolver {
           MinMaxSketch.DEFAULT_MINMAXSKETCH_ROW_NUM,
           GroupedMinMaxSketch.DEFAULT_MINMAXSKETCH_COL_RATIO, 8))
         (compressedGradient, value._2, 1)
-      }).reduce {
+      })*/.reduce {
       (left, right) =>
         val (leftGradVector, leftIntercept, leftCount) = left
         val (rightGradVector, rightIntercept, rightCount) = right
@@ -345,14 +353,19 @@ class SketchGradientDescent extends IterativeSolver {
          }*/
 
     }
-      .map(sketchSum => {
+/*      .map(sketchSum => {
         val (sketchGradient, intercept, count) = sketchSum
         val flinkVector = new DenseVector(sketchGradient.toDense.values)
         (new WeightVector(flinkVector, intercept), count)
-      })
+      })*/
       .mapWithBcVariableIteration(currentWeights) {
-        (gradientCount, weightVector, iteration) => {
-          val (WeightVector(weights, intercept), count) = gradientCount
+        (sketchSum, weightVector, iteration) => {
+          val (sketchGradient, intercept, count) = sketchSum
+          val flinkVector = new DenseVector(sketchGradient.toDense.values)
+          val weightV = new WeightVector(flinkVector, intercept)
+          val weights = weightV.weights
+/*        (gradientCount, weightVector, iteration) => {
+          val (WeightVector(weights, intercept), count) = gradientCount*/
 
           BLAS.scal(1.0 / count, weights)
 

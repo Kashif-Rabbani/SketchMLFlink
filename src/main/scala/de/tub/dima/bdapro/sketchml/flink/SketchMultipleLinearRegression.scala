@@ -158,7 +158,7 @@ object SketchMultipleLinearRegression {
   }
 
   case object CompressionType extends Parameter[String] {
-    val defaultValue = Some("None")
+    val defaultValue = Some("Sketch")
   }
 
   case object ConvergenceThreshold extends Parameter[Double] {

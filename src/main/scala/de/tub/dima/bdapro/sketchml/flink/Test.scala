@@ -28,7 +28,7 @@ object Test {
         val testingDS : DataSet[Vector] = astroTestingDS.map(lv => lv.vector)*/
 
 
-    val dataSet: DataSet[LabeledVector] = MLUtils.readLibSVM(env, params.get("inputTrain"))
+    val dataSet: DataSet[LabeledVector] = MLUtils.readLibSVM(env, params.get("inputTrain")).first(100)
     val trainTestData = Splitter.trainTestSplit(dataSet, 0.5)
     val trainingDS: DataSet[LabeledVector] = trainTestData.training
     val testingDS = trainTestData.testing.map(lv => (lv.vector, lv.label))
