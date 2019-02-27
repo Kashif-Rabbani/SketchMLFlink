@@ -65,8 +65,9 @@ class SketchGradientDescent extends IterativeSolver {
   private val logger: Logger = LoggerFactory.getLogger(SketchGradientDescent.getClass)
   private var totalTimeToTrack = 0.0
   private var globalNumberOfIterations: Int = parameters(Iterations)
-  private var compressionType:String = _
-  private var reduceType:String = "Reduce"
+  private var compressionType: String = _
+  private var reduceType: String = "Reduce"
+
   /** Provides a solution for the given optimization problem
     *
     * @param data           A Dataset of LabeledVector (label, features) pairs
@@ -229,13 +230,14 @@ class SketchGradientDescent extends IterativeSolver {
 
     val partialGradients = data.mapWithBcVariable(currentWeights) { (data, weightVector) =>
       lossFunction.gradient(data, weightVector);
-    }.map(value => {
-      val result = value.weights match {
+    }.map(weightVector => {
+      val vector = weightVector.weights match {
         case d: DenseVector => d
         case s: SparseVector => s.toDenseVector
       }
-      val sketchGradient = new DenseDoubleGradient(result.size, result.data)
-      (sketchGradient, value.intercept)
+      val dimension = vector.data.size
+      val sketchGradient = new DenseDoubleGradient(dimension, vector.data)
+      (sketchGradient, weightVector.intercept)
       /* var sketchGradient: Gradient = null
 
        var data: Array[Double] = value.weights match {
@@ -286,79 +288,50 @@ class SketchGradientDescent extends IterativeSolver {
         (compressedGradient, value._2, 1)
       })
 
-    val sumGradients = (null, null, null)
-    if(reduceType.equals("Reduce")){
-      val sumGradients = partialGradients.reduce {
-          (left, right) =>
-            val (leftGradVector, leftIntercept, leftCount) = left
-            val (rightGradVector, rightIntercept, rightCount) = right
-
-            val leftFlinkVector = new DenseVector(leftGradVector.toDense.values)
-            val leftFlinkGradient = WeightVector(leftFlinkVector, leftIntercept)
-
-            val rightFlinkVector = new DenseVector(rightGradVector.toDense.values)
-            val rightFlinkGradient = WeightVector(rightFlinkVector, rightIntercept)
-
-            val result = leftFlinkGradient.weights match {
-              case d: DenseVector => d
-              case s: SparseVector => s.toDenseVector
-            }
-
-            BLAS.axpy(1.0, rightFlinkGradient.weights, result)
-
-            val sumGradients = WeightVector(
-              result, leftIntercept + rightIntercept)
-
-            val sumGradientsData = sumGradients.weights match {
-              case d: DenseVector => d
-              case s: SparseVector => s.toDenseVector
-            }
-            val sketchGradient = new DenseDoubleGradient(sumGradientsData.size, sumGradientsData.data)
-
-            val compressedGradient = Gradient.compress(sketchGradient, MLConf(Constants.ML_LINEAR_REGRESSION, "", Constants.FORMAT_LIBSVM, 1, 1,
-              1D, 1, 1D, 1D, 1D, 1D, 1D,
-              compressionType, Quantizer.DEFAULT_BIN_NUM,
-              GroupedMinMaxSketch.DEFAULT_MINMAXSKETCH_GROUP_NUM,
-              MinMaxSketch.DEFAULT_MINMAXSKETCH_ROW_NUM,
-              GroupedMinMaxSketch.DEFAULT_MINMAXSKETCH_COL_RATIO, 8))
-
-            (compressedGradient, sumGradients.intercept, leftCount + rightCount)
+    var sumGradients:DataSet[(Gradient,Double,Int)] =
+    if (reduceType.equals("Reduce")) {
+      partialGradients.reduce {
+        (left, right) =>
+          val sum = left._1.toAuto
+          sum.plusBy(right._1)
+          (sum,left._2+right._2,left._3+right._3)
+      }
+    }
+    else {
+      /*partialGradients.reduceGroup(iterator => {
+        var result: DenseVector = null
+        var sumCount: Int = 0
+        var sumIntercept = 0D
+        if (iterator.hasNext) {
+          val (gradVector, intercept, count) = iterator.next()
+          val flinkVector = new DenseVector(gradVector.toDense.values)
+          val flinkGradient = WeightVector(flinkVector, intercept)
+          sumCount += count
+          sumIntercept += intercept
+          result = flinkGradient.weights match {
+            case d: DenseVector => d
+            case s: SparseVector => s.toDenseVector
+          }
         }
-    }
-      else{
-      val sumGradients = partialGradients.reduceGroup(fun = iterator => {
-              var result: DenseVector = null
-              var sumCount: Int = 0
-              var sumIntercept = 0D
-              if (iterator.hasNext) {
-                val (gradVector, intercept, count) = iterator.next()
-                val flinkVector = new DenseVector(gradVector.toDense.values)
-                val flinkGradient = WeightVector(flinkVector, intercept)
-                sumCount += count
-                sumIntercept += intercept
-                result = flinkGradient.weights match {
-                  case d: DenseVector => d
-                  case s: SparseVector => s.toDenseVector
-                }
-              }
-              while (iterator.hasNext) {
-                val (gradVector, intercept, count) = iterator.next()
-                val flinkVector = new DenseVector(gradVector.toDense.values)
-                val flinkGradient = WeightVector(flinkVector, intercept)
-                BLAS.axpy(1.0, flinkGradient.weights, result)
-                sumCount += count
-                sumIntercept += intercept
-              }
-              val gradients = WeightVector(result, sumIntercept)
-              (gradients, sumCount)
-            })
+        while (iterator.hasNext) {
+          val (gradVector, intercept, count) = iterator.next()
+          val flinkVector = new DenseVector(gradVector.toDense.values)
+          val flinkGradient = WeightVector(flinkVector, intercept)
+          BLAS.axpy(1.0, flinkGradient.weights, result)
+          sumCount += count
+          sumIntercept += intercept
+        }
+        val gradients = WeightVector(result, sumIntercept)
+        (gradients, sumCount)
+      })*/
+      null
     }
 
-      sumGradients.map(sketchSum => {
-        val (sketchGradient, intercept, count) = sketchSum
-        val flinkVector = new DenseVector(sketchGradient.toDense.values)
-        (new WeightVector(flinkVector, intercept), count)
-      })
+    sumGradients.map(sketchSum => {
+      val (sketchGradient, intercept, count) = sketchSum
+      val flinkVector = new DenseVector(sketchGradient.toDense.values)
+      (new WeightVector(flinkVector, intercept), count)
+    })
       .mapWithBcVariableIteration(currentWeights) {
 
         (gradientCount, weightVector, iteration) => {
