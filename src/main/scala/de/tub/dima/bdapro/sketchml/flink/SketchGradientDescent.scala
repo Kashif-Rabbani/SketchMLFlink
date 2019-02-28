@@ -232,20 +232,21 @@ class SketchGradientDescent extends IterativeSolver {
     val partialGradients = data.mapWithBcVariable(currentWeights) { (data, weightVector) =>
       lossFunction.gradient(data, weightVector);
     }.map(weightVector => {
-      print(weightVector.weights.toString)
       val vector = weightVector.weights match {
         case d: DenseVector => d
         case s: SparseVector => s.toDenseVector
       }
       dimension = vector.size
       val sketchGradient = new DenseDoubleGradient(dimension, vector.data)
-      (sketchGradient, weightVector.intercept)
+      val gradient:Gradient = sketchGradient.toAuto
+      (gradient, weightVector.intercept)
     })
       .map(value => {
+        val groupNum = 2 //GroupedMinMaxSketch.DEFAULT_MINMAXSKETCH_GROUP_NUM
         val compressedGradient = Gradient.compress(value._1, MLConf(Constants.ML_LINEAR_REGRESSION, "", Constants.FORMAT_LIBSVM, 1, 1,
           1D, 1, 1D, 1D, 1D, 1D, 1D,
           compressionType, Quantizer.DEFAULT_BIN_NUM,
-          GroupedMinMaxSketch.DEFAULT_MINMAXSKETCH_GROUP_NUM,
+          groupNum,
           MinMaxSketch.DEFAULT_MINMAXSKETCH_ROW_NUM,
           GroupedMinMaxSketch.DEFAULT_MINMAXSKETCH_COL_RATIO, 2))
         (compressedGradient, value._2, 1)
