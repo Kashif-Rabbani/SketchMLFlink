@@ -67,7 +67,7 @@ class SketchGradientDescent extends IterativeSolver {
   private var globalNumberOfIterations: Int = parameters(Iterations)
   private var compressionType: String = _
   private var reduceType: String = "Reduce"
-
+  private var dimension:Int = _
   /** Provides a solution for the given optimization problem
     *
     * @param data           A Dataset of LabeledVector (label, features) pairs
@@ -231,52 +231,14 @@ class SketchGradientDescent extends IterativeSolver {
     val partialGradients = data.mapWithBcVariable(currentWeights) { (data, weightVector) =>
       lossFunction.gradient(data, weightVector);
     }.map(weightVector => {
+      print(weightVector.weights.toString)
       val vector = weightVector.weights match {
         case d: DenseVector => d
         case s: SparseVector => s.toDenseVector
       }
-      val dimension = vector.data.size
+      dimension = vector.size
       val sketchGradient = new DenseDoubleGradient(dimension, vector.data)
       (sketchGradient, weightVector.intercept)
-      /* var sketchGradient: Gradient = null
-
-       var data: Array[Double] = value.weights match {
-         case d: DenseVector => d.data
-         case s: SparseVector => s.data
-       }
-       var dim: Int = value.weights.size //2990384
-
-       var nnz = 0
-       for (i <- 0 until data.length)
-         if (Math.abs(data(i)) > Maths.EPS)
-           nnz += 1
-
-       if (nnz > dim * 2 / 3)
-         sketchGradient = new DenseDoubleGradient(data.size, data)
-       else {
-         value.weights match {
-           case d: DenseVector => {
-             val k = new Array[Int](nnz)
-             val v = new Array[Double](nnz)
-             var i = 0
-             var j = 0
-             while (i < data.length && j < nnz) {
-               if (Math.abs(data(i)) > Maths.EPS) {
-                 k(j) = i
-                 v(j) = data(i)
-                 j += 1
-               }
-               i += 1
-             }
-             sketchGradient = new SparseDoubleGradient(dim, k, v)
-           }
-           case s: SparseVector => {
-             sketchGradient = new SparseDoubleGradient(dim, s.indices, s.data)
-           }
-         }
-       }
-       (sketchGradient, value.intercept)*/
-
     })
       .map(value => {
         val compressedGradient = Gradient.compress(value._1, MLConf(Constants.ML_LINEAR_REGRESSION, "", Constants.FORMAT_LIBSVM, 1, 1,
@@ -298,33 +260,17 @@ class SketchGradientDescent extends IterativeSolver {
       }
     }
     else {
-      /*partialGradients.reduceGroup(iterator => {
-        var result: DenseVector = null
-        var sumCount: Int = 0
-        var sumIntercept = 0D
-        if (iterator.hasNext) {
-          val (gradVector, intercept, count) = iterator.next()
-          val flinkVector = new DenseVector(gradVector.toDense.values)
-          val flinkGradient = WeightVector(flinkVector, intercept)
-          sumCount += count
-          sumIntercept += intercept
-          result = flinkGradient.weights match {
-            case d: DenseVector => d
-            case s: SparseVector => s.toDenseVector
-          }
-        }
-        while (iterator.hasNext) {
-          val (gradVector, intercept, count) = iterator.next()
-          val flinkVector = new DenseVector(gradVector.toDense.values)
-          val flinkGradient = WeightVector(flinkVector, intercept)
-          BLAS.axpy(1.0, flinkGradient.weights, result)
-          sumCount += count
-          sumIntercept += intercept
-        }
-        val gradients = WeightVector(result, sumIntercept)
-        (gradients, sumCount)
-      })*/
-      null
+      partialGradients.reduceGroup(grads => {
+        print("ReduceGroupTest: Dimension " + dimension)
+        var sum = Gradient.sum(
+          dimension,
+          grads.map(a => a._1).toArray
+        )
+        val sumIntercept = grads.map(a => a._2).sum
+        val totalCount = grads.length
+
+        (sum, sumIntercept, totalCount)
+      })
     }
 
     sumGradients.map(sketchSum => {
