@@ -97,10 +97,6 @@ class SketchMultipleLinearRegression extends Predictor[SketchMultipleLinearRegre
   // Stores the weights of the linear model after the fitting phase
   var weightsOption: Option[DataSet[WeightVector]] = None
 
-  def setCompression(compression: String): SketchMultipleLinearRegression = {
-    parameters.add(CompressionType, compression)
-    this
-  }
   def setIterations(iterations: Int): SketchMultipleLinearRegression = {
     parameters.add(Iterations, iterations)
     this
@@ -155,10 +151,6 @@ object SketchMultipleLinearRegression {
 
   case object Iterations extends Parameter[Int] {
     val defaultValue = Some(10)
-  }
-
-  case object CompressionType extends Parameter[String] {
-    val defaultValue = Some("None")
   }
 
   case object ConvergenceThreshold extends Parameter[Double] {

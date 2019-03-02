@@ -28,7 +28,7 @@ import org.apache.flink.ml.math._
 import org.apache.flink.ml.optimization.IterativeSolver._
 import org.apache.flink.ml.optimization.LearningRateMethod.LearningRateMethodTrait
 import org.apache.flink.ml.optimization.Solver._
-import org.apache.flink.ml.regression.SketchMultipleLinearRegression.CompressionType
+import org.dma.sketchml.flink.SketchConfig
 import org.dma.sketchml.ml.common.Constants
 import org.dma.sketchml.ml.conf.MLConf
 import org.dma.sketchml.ml.gradient.{DenseDoubleGradient, Gradient, SparseDoubleGradient, ZeroGradient}
@@ -63,7 +63,6 @@ class SketchGradientDescent extends IterativeSolver {
   private val logger: Logger = LoggerFactory.getLogger(SketchGradientDescent.getClass)
   private var totalTimeToTrack = 0.0
   private var globalNumberOfIterations: Int = parameters(Iterations)
-  private var compressionType: String = _
 
   /** Provides a solution for the given optimization problem
     *
@@ -77,7 +76,6 @@ class SketchGradientDescent extends IterativeSolver {
 
     val numberOfIterations: Int = parameters(Iterations)
     globalNumberOfIterations = numberOfIterations
-    compressionType = parameters(CompressionType) //Sketch by default
     val convergenceThresholdOption: Option[Double] = parameters.get(ConvergenceThreshold)
     val lossFunction = parameters(LossFunction)
     val learningRate = parameters(LearningRate)
@@ -231,7 +229,7 @@ class SketchGradientDescent extends IterativeSolver {
     }.map(weightVector => {
       weightVector.weights match {
         case d: DenseVector =>
-          Constants.FEATURES_SIZE = d.size
+          SketchConfig.FEATURES_SIZE = d.size
           val nnz = countNNZ(d.data.length, d.data)
           if (nnz <= 0) {
             (ZeroGradient.getInstance(), weightVector.intercept)
@@ -241,7 +239,7 @@ class SketchGradientDescent extends IterativeSolver {
           }
 
         case s: SparseVector =>
-          Constants.FEATURES_SIZE = s.size
+          SketchConfig.FEATURES_SIZE = s.size
           val nnz = countNNZ(s.data.length, s.data)
           if (nnz <= 0) {
             (ZeroGradient.getInstance(), weightVector.intercept)
@@ -268,7 +266,7 @@ class SketchGradientDescent extends IterativeSolver {
       .reduceGroup(comressedGradientIter => {
         var count = 0
         var interceptCount = 0D
-        val sumSketchGradients = new DenseDoubleGradient(Constants.FEATURES_SIZE)
+        val sumSketchGradients = new DenseDoubleGradient(SketchConfig.FEATURES_SIZE)
         comressedGradientIter.foreach(compressedGrad => {
           interceptCount += compressedGrad._2
           if (!compressedGrad._1.isInstanceOf[ZeroGradient]) {
@@ -343,8 +341,8 @@ class SketchGradientDescent extends IterativeSolver {
   private def sketch(gradient: Gradient): Gradient = {
     val compressedGradient = Gradient.compress(gradient, MLConf(Constants.ML_LINEAR_REGRESSION, "", Constants.FORMAT_LIBSVM, 1, 1,
       1D, 1, 1D, 1D, 1D, 1D, 1D,
-      compressionType, Quantizer.DEFAULT_BIN_NUM,
-      Constants.SKETCH_GROUP_NO,
+      SketchConfig.COMPRESSION_TYPE, Quantizer.DEFAULT_BIN_NUM,
+      SketchConfig.SKETCH_GROUP_NO,
       MinMaxSketch.DEFAULT_MINMAXSKETCH_ROW_NUM,
       GroupedMinMaxSketch.DEFAULT_MINMAXSKETCH_COL_RATIO, 8))
     compressedGradient
