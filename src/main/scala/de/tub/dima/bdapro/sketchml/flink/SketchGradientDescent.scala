@@ -19,26 +19,24 @@
 
 package org.apache.flink.ml.optimization
 
-import org.apache.flink.api.common.functions.{MapFunction, RichGroupReduceFunction}
+import java.io.{File, PrintWriter}
+
 import org.apache.flink.api.scala._
+import org.apache.flink.ml._
 import org.apache.flink.ml.common._
 import org.apache.flink.ml.math._
 import org.apache.flink.ml.optimization.IterativeSolver._
 import org.apache.flink.ml.optimization.LearningRateMethod.LearningRateMethodTrait
 import org.apache.flink.ml.optimization.Solver._
-import org.apache.flink.ml._
-import org.dma.sketchml._
+import org.dma.sketchml.flink.SketchConfig
 import org.dma.sketchml.ml.common.Constants
 import org.dma.sketchml.ml.conf.MLConf
-import org.dma.sketchml.ml.gradient.{DenseDoubleGradient, Gradient, SparseDoubleGradient}
+import org.dma.sketchml.ml.gradient.{DenseDoubleGradient, Gradient, SparseDoubleGradient, ZeroGradient}
 import org.dma.sketchml.ml.util.Maths
 import org.dma.sketchml.sketch.base.Quantizer
 import org.dma.sketchml.sketch.sketch.frequency.{GroupedMinMaxSketch, MinMaxSketch}
 import org.slf4j.{Logger, LoggerFactory}
-import java.io.File
-import java.io.PrintWriter
 
-import org.apache.flink.ml.regression.SketchMultipleLinearRegression.CompressionType
 
 /** Base class which performs Stochastic Gradient Descent optimization using mini batches.
   *
@@ -65,9 +63,6 @@ class SketchGradientDescent extends IterativeSolver {
   private val logger: Logger = LoggerFactory.getLogger(SketchGradientDescent.getClass)
   private var totalTimeToTrack = 0.0
   private var globalNumberOfIterations: Int = parameters(Iterations)
-  private var compressionType: String = _
-  private var reduceType: String = "Reduce"
-  private var dimension: Int = _
 
   /** Provides a solution for the given optimization problem
     *
@@ -81,7 +76,6 @@ class SketchGradientDescent extends IterativeSolver {
 
     val numberOfIterations: Int = parameters(Iterations)
     globalNumberOfIterations = numberOfIterations
-    compressionType = parameters(CompressionType) //Sketch by default
     val convergenceThresholdOption: Option[Double] = parameters.get(ConvergenceThreshold)
     val lossFunction = parameters(LossFunction)
     val learningRate = parameters(LearningRate)
@@ -228,63 +222,66 @@ class SketchGradientDescent extends IterativeSolver {
                        learningRateMethod: LearningRateMethodTrait)
   : DataSet[WeightVector] = {
     val startTime = System.currentTimeMillis()
+    var featureDim = 0
 
-    val partialGradients = data.mapWithBcVariable(currentWeights) { (data, weightVector) =>
-      lossFunction.gradient(data, weightVector);
+    data.mapWithBcVariable(currentWeights) { (data, weightVector) =>
+      lossFunction.gradient(data, weightVector) //loss function flink
     }.map(weightVector => {
-      val vector = weightVector.weights match {
-        case d: DenseVector => d
-        case s: SparseVector => s.toDenseVector
+      weightVector.weights match {
+        case d: DenseVector =>
+          SketchConfig.FEATURES_SIZE = d.size
+          val nnz = countNNZ(d.data.length, d.data)
+          if (nnz <= 0) {
+            (ZeroGradient.getInstance(), weightVector.intercept)
+          } else {
+            val sketchGradient = new DenseDoubleGradient(d.size, d.data)
+            (sketchGradient, weightVector.intercept)
+          }
+
+        case s: SparseVector =>
+          SketchConfig.FEATURES_SIZE = s.size
+          val nnz = countNNZ(s.data.length, s.data)
+          if (nnz <= 0) {
+            (ZeroGradient.getInstance(), weightVector.intercept)
+          } else {
+            val sketchGradient = new SparseDoubleGradient(s.size, s.indices, s.data)
+            (sketchGradient, weightVector.intercept)
+          }
       }
-      dimension = vector.size
-      val sketchGradient = new DenseDoubleGradient(dimension, vector.data)
-      val gradient:Gradient = sketchGradient.toAuto
-      (gradient, weightVector.intercept)
     })
       .map(value => {
-        val groupNum = 2 //GroupedMinMaxSketch.DEFAULT_MINMAXSKETCH_GROUP_NUM
-        val compressedGradient = Gradient.compress(value._1, MLConf(Constants.ML_LINEAR_REGRESSION, "", Constants.FORMAT_LIBSVM, 1, 1,
-          1D, 1, 1D, 1D, 1D, 1D, 1D,
-          compressionType, Quantizer.DEFAULT_BIN_NUM,
-          groupNum,
-          MinMaxSketch.DEFAULT_MINMAXSKETCH_ROW_NUM,
-          GroupedMinMaxSketch.DEFAULT_MINMAXSKETCH_COL_RATIO, 2))
+        var compressedGradient: Gradient = null
+        value._1 match {
+          case gradient: ZeroGradient =>
+            compressedGradient = gradient
+
+          case gradient: SparseDoubleGradient =>
+            compressedGradient = sketch(gradient)
+
+          case gradient: DenseDoubleGradient =>
+            compressedGradient = sketch(gradient)
+        }
         (compressedGradient, value._2, 1)
       })
-
-    var sumGradients: DataSet[(Gradient, Double, Int)] =
-      if (reduceType.equals("Reduce")) {
-        partialGradients.reduce {
-          (left, right) =>
-            val sum = left._1.toAuto
-            sum.plusBy(right._1)
-            (sum, left._2 + right._2, left._3 + right._3)
-        }
-      }
-      else {
-        partialGradients.reduceGroup(grads => {
-          print("ReduceGroupTest: Dimension " + dimension)
-          var sum = Gradient.sum(
-            dimension,
-            grads.map(a => a._1).toArray
-          )
-          val sumIntercept = grads.map(a => a._2).sum
-          val totalCount = grads.length
-
-          (sum, sumIntercept, totalCount)
+      .reduceGroup(comressedGradientIter => {
+        var count = 0
+        var interceptCount = 0D
+        val sumSketchGradients = new DenseDoubleGradient(SketchConfig.FEATURES_SIZE)
+        comressedGradientIter.foreach(compressedGrad => {
+          interceptCount += compressedGrad._2
+          if (!compressedGrad._1.isInstanceOf[ZeroGradient]) {
+            sumSketchGradients.plusBy(compressedGrad._1.toAuto)
+          }
+          count += 1
         })
-      }
-
-    sumGradients.map(sketchSum => {
-      val (sketchGradient, intercept, count) = sketchSum
-      val flinkVector = new DenseVector(sketchGradient.toDense.values)
-      (new WeightVector(flinkVector, intercept), count)
-    })
+        sumSketchGradients.toAuto.toDense
+        val flinkVector = new DenseVector(sumSketchGradients.values)
+        val flinkGradient = WeightVector(flinkVector, interceptCount)
+        (flinkGradient, count)
+      })
       .mapWithBcVariableIteration(currentWeights) {
-
         (gradientCount, weightVector, iteration) => {
           val (WeightVector(weights, intercept), count) = gradientCount
-
           BLAS.scal(1.0 / count, weights)
 
           val gradient = WeightVector(weights, intercept / count)
@@ -304,9 +301,6 @@ class SketchGradientDescent extends IterativeSolver {
           logger.info("Time elapsed " + timeElapsed)
           totalTimeToTrack += timeElapsed
           logger.info("Value of Iteration: " + iteration + " : Total Number of Iterations set by user: " + globalNumberOfIterations)
-          //writer.append("Time elapsed for this iteration: " + timeElapsed + "\n")
-          //writer.append("Total Time elapsed for " + iteration + " : " + timeElapsed + "\n")
-
           if (iteration == globalNumberOfIterations) {
             val avg = totalTimeToTrack / iteration
             logger.info("Average Runtime Epoch: " + avg)
@@ -314,11 +308,9 @@ class SketchGradientDescent extends IterativeSolver {
             writer.append("Average Runtime Epoch: " + avg + "\n")
             writer.close()
           }
-
-          WeightVector(
-            newWeights,
-            weightVector.intercept - effectiveLearningRate * gradient.intercept)
+          WeightVector(newWeights, weightVector.intercept - effectiveLearningRate * gradient.intercept)
         }
+
       }
   }
 
@@ -341,6 +333,35 @@ class SketchGradientDescent extends IterativeSolver {
     regularizationPenalty.takeStep(weightVector, gradient, regularizationConstant, learningRate)
   }
 
+  /** Calculates Sketch of the given gradient by compression
+    *
+    * @param gradient
+    * @return
+    */
+  private def sketch(gradient: Gradient): Gradient = {
+    val compressedGradient = Gradient.compress(gradient, MLConf(Constants.ML_LINEAR_REGRESSION, "", Constants.FORMAT_LIBSVM, 1, 1,
+      1D, 1, 1D, 1D, 1D, 1D, 1D,
+      SketchConfig.COMPRESSION_TYPE, Quantizer.DEFAULT_BIN_NUM,
+      SketchConfig.SKETCH_GROUP_NO,
+      MinMaxSketch.DEFAULT_MINMAXSKETCH_ROW_NUM,
+      GroupedMinMaxSketch.DEFAULT_MINMAXSKETCH_COL_RATIO, 8))
+    compressedGradient
+  }
+
+  /** Count the number of non-zero values in an array of double values
+    *
+    * @param dim
+    * @param values
+    * @return
+    */
+  private def countNNZ(dim: Int, values: Array[Double]): Int = {
+    var nnz = 0
+    for (i <- 0 until dim)
+      if (Math.abs(values(i)) > Maths.EPS)
+        nnz += 1
+    nnz
+  }
+
   /** Calculates the regularized loss, from the data and given weights.
     *
     * @param data         A Dataset of LabeledVector (label, features) pairs
@@ -361,6 +382,7 @@ class SketchGradientDescent extends IterativeSolver {
       lossCount => lossCount._1 / lossCount._2
     }
   }
+
 }
 
 
@@ -371,6 +393,7 @@ object SketchGradientDescent {
   def apply() = new SketchGradientDescent
 }
 
+/*
 class changeFlinkGradientToSketchMLGradient extends MapFunction[WeightVector, (Gradient, Double)] {
   def map(value: WeightVector): (Gradient, Double) = {
     val result = value.weights match {
@@ -384,23 +407,6 @@ class changeFlinkGradientToSketchMLGradient extends MapFunction[WeightVector, (G
     (sketchGradient, value.intercept)
   }
 }
+*/
 
-/*class changeSketchMLGradientToFlinkGradient extends MapFunction[(DenseDoubleGradient, Double), WeightVector] {
-  def map(value: (DenseDoubleGradient, Double)): WeightVector = {
-    val intercept = value._2
-    val gradient = value._1
-    val flinkVector = new DenseVector(gradient.values).toSparseVector
-    val flinkGradient: WeightVector = new WeightVector(flinkVector,intercept)
-    flinkGradient
-  }
-}*/
-
-/*class compressSketchGradient extends MapFunction[(Gradient, Double), (Gradient, Double)] {
-  def map(value: (Gradient, Double)): (Gradient, Double) = {
-    (Gradient.compress(value._1, MLConf("", "", "", 1, 1, 1D, 1, 1D, 1D, 1D, 1D, 1D, Constants.GRADIENT_COMPRESSOR_SKETCH, Quantizer.DEFAULT_BIN_NUM,
-      GroupedMinMaxSketch.DEFAULT_MINMAXSKETCH_GROUP_NUM,
-      MinMaxSketch.DEFAULT_MINMAXSKETCH_ROW_NUM,
-      GroupedMinMaxSketch.DEFAULT_MINMAXSKETCH_COL_RATIO, 8)), value._2)
-  }
-}*/
 
