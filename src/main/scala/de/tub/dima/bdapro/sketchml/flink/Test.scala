@@ -40,7 +40,6 @@ object Test {
       val mlr = SketchMultipleLinearRegression()
         .setIterations(params.get("iterations").toInt)
         .setStepsize(params.get("stepSize").toDouble)
-          .setCompression(params.get("compressionType"))
         //.setConvergenceThreshold(params.get("threshold").toDouble)
 
       mlr.fit(trainingDS)
