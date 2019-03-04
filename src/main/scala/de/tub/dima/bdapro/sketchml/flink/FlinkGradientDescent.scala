@@ -19,7 +19,7 @@
 
 package org.apache.flink.ml.optimization
 
-import java.io.{File, PrintWriter}
+import java.io.{File, FileOutputStream, PrintWriter}
 
 import org.apache.flink.api.scala._
 import org.apache.flink.ml._
@@ -28,6 +28,7 @@ import org.apache.flink.ml.math._
 import org.apache.flink.ml.optimization.IterativeSolver._
 import org.apache.flink.ml.optimization.LearningRateMethod.LearningRateMethodTrait
 import org.apache.flink.ml.optimization.Solver._
+import org.dma.sketchml.flink.SketchConfig
 import org.dma.sketchml.ml.util.Maths
 import org.slf4j.{Logger, LoggerFactory}
 
@@ -253,18 +254,19 @@ class FlinkGradientDescent extends IterativeSolver {
           regularizationConstant,
           effectiveLearningRate)
 
-        val timeElapsed = System.currentTimeMillis() - startTime
-        logger.info("Time elapsed " + timeElapsed)
-        totalTimeToTrack += timeElapsed
-        logger.info("Value of Iteration: " + iteration + " : Total Number of Iterations set by user: " + globalNumberOfIterations)
+        //Initialize a file object to write the logs
+        val writer = new PrintWriter(new FileOutputStream(new File(SketchConfig.LOG_OUTPUT_PATH), true))
 
+        writer.append(java.time.LocalDateTime.now.toString + " ")
+        writer.append("Effective Learning Rate: " + effectiveLearningRate + "\n")
+
+        val timeElapsed = System.currentTimeMillis() - startTime
+        totalTimeToTrack += timeElapsed
         if (iteration == globalNumberOfIterations) {
           val avg = totalTimeToTrack / iteration
-          logger.info("Average Runtime Epoch: " + avg)
-          val writer = new PrintWriter(new File("FlinkGradientDescentLogs.txt"))
-          writer.append("Average Runtime Epoch: " + avg + "\n")
-          writer.close()
+          writer.append(java.time.LocalDateTime.now.toString + " Average Runtime Epoch for " + globalNumberOfIterations + " SGD iterations: " + avg + " ms or " + avg/1000 + " sec\n")
         }
+        writer.close()
         WeightVector(
           newWeights,
           weightVector.intercept - effectiveLearningRate * gradient.intercept)

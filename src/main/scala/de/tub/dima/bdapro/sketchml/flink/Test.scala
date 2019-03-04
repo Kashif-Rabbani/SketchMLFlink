@@ -1,6 +1,8 @@
 
 package de.tub.dima.bdapro.sketchml.flink
 
+import java.io.{File, FileOutputStream, PrintWriter}
+
 import org.apache.flink.api.java.utils.ParameterTool
 import org.apache.flink.api.scala._
 import org.apache.flink.core.fs.FileSystem.WriteMode
@@ -27,8 +29,14 @@ object Test {
         val astroTestingDS: DataSet[LabeledVector] = MLUtils.readLibSVM(env, "/home/batuhan/Downloads/kddb/kddb.t")
         val testingDS : DataSet[Vector] = astroTestingDS.map(lv => lv.vector)*/
 
+    val writer = new PrintWriter(new FileOutputStream(new File(SketchConfig.LOG_OUTPUT_PATH), true))
 
-    val dataSet: DataSet[LabeledVector] = MLUtils.readLibSVM(env, params.get("inputTrain"))
+    writer.append("\n"+java.time.LocalDateTime.now.toString + " Experiment Started for " + params.get("sketchOrFlink") + ". " + "Parallelism " + params.get("parallelism") +
+      " Iterations: " + params.get("iterations") + " StepSize: " + params.get("stepSize") + " CompressionType: " + params.get("compressionType") +
+      " Train Data File: " + params.get("inputTrain") + "\n")
+    writer.close()
+
+    val dataSet: DataSet[LabeledVector] = MLUtils.readLibSVM(env, params.get("inputTrain")).first(10)
     val trainTestData = Splitter.trainTestSplit(dataSet, 0.5)
     val trainingDS: DataSet[LabeledVector] = trainTestData.training
     val testingDS = trainTestData.testing.map(lv => (lv.vector, lv.label))
