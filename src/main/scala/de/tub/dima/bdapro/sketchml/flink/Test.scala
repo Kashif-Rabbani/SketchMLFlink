@@ -31,13 +31,13 @@ object Test {
 
     val writer = new PrintWriter(new FileOutputStream(new File(SketchConfig.LOG_OUTPUT_PATH), true))
 
-    writer.append("\n"+java.time.LocalDateTime.now.toString + " Experiment Started for " + params.get("sketchOrFlink") + ". " + "Parallelism " + params.get("parallelism") +
+    writer.append("\n" + java.time.LocalDateTime.now.toString + " Experiment Started for " + params.get("sketchOrFlink") + ". " + "Parallelism " + params.get("parallelism") +
       " Iterations: " + params.get("iterations") + " StepSize: " + params.get("stepSize") + " CompressionType: " + params.get("compressionType") +
       " Train Data File: " + params.get("inputTrain") + "\n")
     writer.close()
 
-    val dataSet: DataSet[LabeledVector] = MLUtils.readLibSVM(env, params.get("inputTrain")).first(10)
-    val trainTestData = Splitter.trainTestSplit(dataSet, 0.5)
+    val dataSet: DataSet[LabeledVector] = MLUtils.readLibSVM(env, params.get("inputTrain"))
+    val trainTestData = Splitter.trainTestSplit(dataSet, 0.75)
     val trainingDS: DataSet[LabeledVector] = trainTestData.training
     val testingDS = trainTestData.testing.map(lv => (lv.vector, lv.label))
 
@@ -48,15 +48,37 @@ object Test {
       val mlr = SketchMultipleLinearRegression()
         .setIterations(params.get("iterations").toInt)
         .setStepsize(params.get("stepSize").toDouble)
-        //.setConvergenceThreshold(params.get("threshold").toDouble)
+      //.setConvergenceThreshold(params.get("threshold").toDouble)
 
       mlr.fit(trainingDS)
+      /*A residual sum of squares (RSS) is a statistical technique used to measure the amount of variance in a data set
+      that is not explained by a regression model.The residual sum of squares is a measure of the amount of error remaining between
+      the regression function and the data set.*/
+      val writer = new PrintWriter(new FileOutputStream(new File(SketchConfig.LOG_OUTPUT_PATH), true))
+
+      val evaluationPairs = mlr.evaluate(testingDS)
+
+/*      val weightList = mlr.weightsOption.get.collect()
+      val srs = mlr.squaredResidualSum(trainingDS).collect().head
+
+      println("SRS: " + srs)
+      println("WeightList Size: " + weightList.size)*/
 
       // Calculate the predictions for the test data
       // val predictions: DataSet[(Vector,Double)] = mlr.predict(testingDS)
+      val absoluteErrorSum = evaluationPairs.map(pair => {
+        val (truth, prediction) = pair
+        Math.abs(truth - prediction)
+      }).reduce((i,k) => i+k)
 
-      val evaluationPairs = mlr.evaluate(testingDS)
-      evaluationPairs.writeAsText(params.get("outputPathSketch"), WriteMode.OVERWRITE).setParallelism(1)
+/*      val absoluteErrorSum = evaluationPairs.collect().map{
+        case (truth, prediction) => Math.abs(truth - prediction)}.sum*/
+      //println("Absolute Error Sum "+ absoluteErrorSum.toString)
+      //writer.append("SRS: " + srs + " WeightListSize: " + weightList.size + " Absolute Error Sum: " + absoluteErrorSum + "\n")
+      writer.append(" Absolute Error Sum: " + absoluteErrorSum.collect().head + "\n")
+      writer.close()
+
+      //evaluationPairs.writeAsText(params.get("outputPathSketch"), WriteMode.OVERWRITE).setParallelism(1)
     }
 
     // parameter "Flink" will run SGD without compression as original Flink SGD
@@ -65,21 +87,44 @@ object Test {
       val mlr = FlinkMultipleLinearRegression()
         .setIterations(params.get("iterations").toInt)
         .setStepsize(params.get("stepSize").toDouble)
-       // .setConvergenceThreshold(params.get("threshold").toDouble)
+      // .setConvergenceThreshold(params.get("threshold").toDouble)
 
       mlr.fit(trainingDS)
+      /*A residual sum of squares (RSS) is a statistical technique used to measure the amount of variance in a data set
+      that is not explained by a regression model.The residual sum of squares is a measure of the amount of error remaining between
+      the regression function and the data set.*/
+      val writer = new PrintWriter(new FileOutputStream(new File(SketchConfig.LOG_OUTPUT_PATH), true))
+
+      //val weightList = mlr.weightsOption.get.collect()
+      //val srs = mlr.squaredResidualSum(trainingDS).collect().head
+      /*println("SRS: " + srs)
+      println("WeightList Size: " + weightList.size)
+*/
+
       // Calculate the predictions for the test data
       // val predictions: DataSet[(Vector,Double)] = mlr.predict(testingDS)
 
-      val evaluationPairs = mlr.evaluate(testingDS)
-      evaluationPairs.writeAsText(params.get("outputPathFlink"), WriteMode.OVERWRITE).setParallelism(1)
+      val evaluationPairs= mlr.evaluate(testingDS)
+      val absoluteErrorSum = evaluationPairs.map(pair => {
+        val (truth, prediction) = pair
+        Math.abs(truth - prediction)
+      }).reduce((i,k) => i+k)
+
+/*      val absoluteErrorSum = evaluationPairs.collect().map{
+        case (truth, prediction) => Math.abs(truth - prediction)}.sum*/
+      //println("Absolute Error Sum "+ absoluteErrorSum)
+
+      writer.append(" Absolute Error Sum: " + absoluteErrorSum.collect().head + "\n")
+      writer.close()
+      //evaluationPairs.writeAsText(params.get("outputPathSketch"), WriteMode.OVERWRITE).setParallelism(1)
     }
 
     //    val absoluteErrorSum = evaluationPairs.collect().map{
     //    case (truth, prediction) => Math.abs(truth - prediction)}.sum
     //    print(absoluteErrorSum)
     //    absoluteErrorSum should be < 50.0
-    env.execute
+    //env.execute
+
     //print(env.getExecutionPlan())
   }
 }

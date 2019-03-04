@@ -21,6 +21,7 @@ package org.apache.flink.ml.optimization
 
 import java.io.{File, FileOutputStream, PrintWriter}
 
+import de.tub.dima.bdapro.sketchml.flink.SketchConfig
 import org.apache.flink.api.scala._
 import org.apache.flink.ml._
 import org.apache.flink.ml.common._
@@ -28,8 +29,6 @@ import org.apache.flink.ml.math._
 import org.apache.flink.ml.optimization.IterativeSolver._
 import org.apache.flink.ml.optimization.LearningRateMethod.LearningRateMethodTrait
 import org.apache.flink.ml.optimization.Solver._
-import org.dma.sketchml.flink.SketchConfig
-import org.dma.sketchml.ml.util.Maths
 import org.slf4j.{Logger, LoggerFactory}
 
 /** Base class which performs Stochastic Gradient Descent optimization using mini batches.
