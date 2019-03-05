@@ -75,7 +75,8 @@ object Test {
         case (truth, prediction) => Math.abs(truth - prediction)}.sum*/
       //println("Absolute Error Sum "+ absoluteErrorSum.toString)
       //writer.append("SRS: " + srs + " WeightListSize: " + weightList.size + " Absolute Error Sum: " + absoluteErrorSum + "\n")
-      writer.append(" Absolute Error Sum: " + absoluteErrorSum.collect().head + "\n")
+      writer.append(java.time.LocalDateTime.now.toString + " ")
+      writer.append("Absolute Error Sum: " + absoluteErrorSum.collect().head + "\n")
       writer.close()
 
       //evaluationPairs.writeAsText(params.get("outputPathSketch"), WriteMode.OVERWRITE).setParallelism(1)
@@ -113,8 +114,8 @@ object Test {
 /*      val absoluteErrorSum = evaluationPairs.collect().map{
         case (truth, prediction) => Math.abs(truth - prediction)}.sum*/
       //println("Absolute Error Sum "+ absoluteErrorSum)
-
-      writer.append(" Absolute Error Sum: " + absoluteErrorSum.collect().head + "\n")
+      writer.append(java.time.LocalDateTime.now.toString + " ")
+      writer.append("Absolute Error Sum: " + absoluteErrorSum.collect().head + "\n")
       writer.close()
       //evaluationPairs.writeAsText(params.get("outputPathSketch"), WriteMode.OVERWRITE).setParallelism(1)
     }
