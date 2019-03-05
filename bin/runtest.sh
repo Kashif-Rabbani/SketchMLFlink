@@ -5,6 +5,8 @@ maxIterations=$2
 minParallelism=$3
 maxParallelism=$4
 trainingFile=$5
+method=$6
+compression=$7
 
 TRAINING_DATA_PATH=/home/marc/Documents/SketchMLData/
 TESTING_DATA_PATH=/home/marc/Documents/SketchMLData/
@@ -14,10 +16,10 @@ JAR_PATH=/home/marc/Development/SketchMLFlink/target/sketchmlFlink-1.0-SNAPSHOT.
 
 usage ()
 {
-  echo 'Usage: ./runTest.sh minIterations maxIterations minParallelism maxParallelism trainingFile'
+  echo 'Usage: ./runTest.sh minIterations maxIterations minParallelism maxParallelism trainingFile method compression'
 }
 
-if [ "$#" -ne 5 ]
+if [ "$#" -ne 7 ]
 then
   usage
 else
@@ -28,8 +30,8 @@ else
       do
         echo ">> Iterations $iterations"
         echo ">> Training file  $trainingFile"
-       echo "$FLINK_CLUSTER_PATH run $JAR_PATH --inputTrain $TRAINING_DATA_PATH$trainingFile --parallelism $parallelism --iterations $iterations --stepSize "0.5" --compressionType "Sketch" --threshold "0.001" --sketchOrFlink "Sketch" --outputPathSketch "sketchMLOutput"$parallelism-$iterations-$trainingFile".txt" --outputPathFlink "flinkOriginalSGDOutput"$parallelism-$iterations-$trainingFile".txt""
-       $FLINK_CLUSTER_PATH run $JAR_PATH --inputTrain $TRAINING_DATA_PATH$trainingFile --parallelism $parallelism --iterations $iterations --stepSize "0.5" --compressionType "Sketch" --threshold "0.001" --sketchOrFlink "Sketch" --outputPathSketch "sketchMLOutput"$parallelism-$iterations-$trainingFile".txt" --outputPathFlink "flinkOriginalSGDOutput"$parallelism-$iterations-$trainingFile".txt"
+       echo "$FLINK_CLUSTER_PATH run $JAR_PATH --inputTrain $TRAINING_DATA_PATH$trainingFile --parallelism $parallelism --iterations $iterations --stepSize "0.5" --compressionType $compression --threshold "0.001" --sketchOrFlink $method --outputPathSketch "sketchMLOutput"$parallelism-$iterations-$trainingFile".txt" --outputPathFlink "flinkOriginalSGDOutput"$parallelism-$iterations-$trainingFile".txt""
+       $FLINK_CLUSTER_PATH run $JAR_PATH --inputTrain $TRAINING_DATA_PATH$trainingFile --parallelism $parallelism --iterations $iterations --stepSize "0.5" --compressionType $compression --threshold "0.001" --sketchOrFlink $method --outputPathSketch "sketchMLOutput"$parallelism-$iterations-$trainingFile".txt" --outputPathFlink "flinkOriginalSGDOutput"$parallelism-$iterations-$trainingFile".txt"
     done
   done
 fi
