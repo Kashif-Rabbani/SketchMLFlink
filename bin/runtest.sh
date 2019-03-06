@@ -8,11 +8,11 @@ trainingFile=$5
 method=$6
 compression=$7
 
-TRAINING_DATA_PATH=/home/marc/Documents/SketchMLData/
-TESTING_DATA_PATH=/home/marc/Documents/SketchMLData/
+TRAINING_DATA_PATH=/share/flink/flink-sketchml-batch/data/training/
+TESTING_DATA_PATH=/share/flink/flink-sketchml-batch/data/testing/
 
 FLINK_CLUSTER_PATH=/share/flink/flink-1.7.0/bin/flink
-JAR_PATH=/home/marc/Development/SketchMLFlink/target/sketchmlFlink-1.0-SNAPSHOT.jar
+JAR_PATH=/share/flink/flink-sketchml-batch/SketchMLFlink/target/sketchmlFlink-1.0-SNAPSHOT.jar
 
 usage ()
 {
@@ -23,12 +23,12 @@ if [ "$#" -ne 7 ]
 then
   usage
 else
-  for parallelism  in $( seq $minParallelism $maxParallelism)
+  for (( iterations=$minIterations; iterations<=$maxIterations; iterations+=100 ));
   do
-    echo "> Parallelism $parallelism"
-    for iterations  in $( seq $minIterations $maxIterations)
+    echo ">> Iterations $iterations"
+    for (( parallelism=$minParallelism; parallelism<=$maxParallelism; parallelism+=8 ));
       do
-        echo ">> Iterations $iterations"
+        echo "> Parallelism $parallelism"
         echo ">> Training file  $trainingFile"
        echo "$FLINK_CLUSTER_PATH run $JAR_PATH --inputTrain $TRAINING_DATA_PATH$trainingFile --parallelism $parallelism --iterations $iterations --stepSize "0.5" --compressionType $compression --threshold "0.001" --sketchOrFlink $method --outputPathSketch "sketchMLOutput"$parallelism-$iterations-$trainingFile".txt" --outputPathFlink "flinkOriginalSGDOutput"$parallelism-$iterations-$trainingFile".txt""
        $FLINK_CLUSTER_PATH run $JAR_PATH --inputTrain $TRAINING_DATA_PATH$trainingFile --parallelism $parallelism --iterations $iterations --stepSize "0.5" --compressionType $compression --threshold "0.001" --sketchOrFlink $method --outputPathSketch "sketchMLOutput"$parallelism-$iterations-$trainingFile".txt" --outputPathFlink "flinkOriginalSGDOutput"$parallelism-$iterations-$trainingFile".txt"
