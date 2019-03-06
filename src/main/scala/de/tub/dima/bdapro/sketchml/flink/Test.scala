@@ -52,8 +52,8 @@ object Test {
       val startTime = System.currentTimeMillis()
       mlr.fit(trainingDS)
       val elapsedTime = System.currentTimeMillis() - startTime
-      writer.append(java.time.LocalDateTime.now.toString + " Total elapsed time: " + elapsedTime + "\n")
-      writer.append(java.time.LocalDateTime.now.toString + " Average time per epoch: " + elapsedTime / params.get("iterations").toInt+ "\n")
+      writer.append(java.time.LocalDateTime.now.toString + " Total elapsed time: " + elapsedTime.toDouble + "\n")
+      writer.append(java.time.LocalDateTime.now.toString + " Average time per epoch: " + elapsedTime.toDouble / params.get("iterations").toInt+ "\n")
 
       val evaluationPairs = mlr.evaluate(testingDS)
 
@@ -80,8 +80,8 @@ object Test {
       val startTime = System.currentTimeMillis()
       mlr.fit(trainingDS)
       val elapsedTime = System.currentTimeMillis() - startTime
-      writer.append(java.time.LocalDateTime.now.toString + " Total elapsed time: " + elapsedTime + "\n")
-      writer.append(java.time.LocalDateTime.now.toString + " Average time per epoch: " + (elapsedTime / params.get("iterations").toInt) + "\n")
+      writer.append(java.time.LocalDateTime.now.toString + " Total elapsed time: " + elapsedTime.toDouble + "\n")
+      writer.append(java.time.LocalDateTime.now.toString + " Average time per epoch: " + (elapsedTime.toDouble / params.get("iterations").toInt) + "\n")
 
       // Calculate the predictions for the test data
       // val predictions: DataSet[(Vector,Double)] = mlr.predict(testingDS)
@@ -101,7 +101,7 @@ object Test {
       writer.append("CSV_Line: " + params.get("sketchOrFlink") + "," + params.get("parallelism") +
         "," + params.get("iterations") + "," + params.get("stepSize") + "," + params.get("compressionType") +
         "," + params.get("inputTrain").split("/").last + "," + params.get("maxDim") +
-        "," + elapsedTime + "," + (elapsedTime / params.get("iterations").toInt) +
+        "," + elapsedTime.toDouble + "," + (elapsedTime.toDouble / params.get("iterations").toInt) +
         "," + abs + "," + abs/testingRows
       )
     }
