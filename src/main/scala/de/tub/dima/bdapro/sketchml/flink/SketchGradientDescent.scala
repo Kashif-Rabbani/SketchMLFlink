@@ -19,8 +19,6 @@
 
 package org.apache.flink.ml.optimization
 
-import java.io.{File, FileOutputStream, PrintWriter}
-
 import de.tub.dima.bdapro.sketchml.flink.SketchConfig
 import org.apache.flink.api.scala._
 import org.apache.flink.ml._
@@ -298,18 +296,14 @@ class SketchGradientDescent extends IterativeSolver {
             effectiveLearningRate)
 
           //Initialize a file object to write the logs
-          val writer = new PrintWriter(new FileOutputStream(new File(SketchConfig.LOG_OUTPUT_PATH), true))
+          logger.debug("Effective Learning Rate: " + effectiveLearningRate + "\n")
 
-          writer.append(java.time.LocalDateTime.now.toString + " ")
-          writer.append("Effective Learning Rate: " + effectiveLearningRate + "\n")
+          logger.debug("Epoch finished.")
 
-          val timeElapsed = System.currentTimeMillis() - startTime
-          totalTimeToTrack += timeElapsed
           if (iteration == globalNumberOfIterations) {
-            val avg = totalTimeToTrack / iteration
-            writer.append(java.time.LocalDateTime.now.toString + " Average Runtime Epoch for " + globalNumberOfIterations + " SGD iterations: " + avg + " ms or " + avg/1000 + " sec\n")
+            logger.debug(globalNumberOfIterations + " finished.")
           }
-          writer.close()
+
           WeightVector(newWeights, weightVector.intercept - effectiveLearningRate * gradient.intercept)
         }
 
