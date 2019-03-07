@@ -51,9 +51,6 @@ object Test {
 
       val startTime = System.currentTimeMillis()
       mlr.fit(trainingDS)
-      val elapsedTime = System.currentTimeMillis() - startTime
-      writer.append(java.time.LocalDateTime.now.toString + " Total elapsed time: " + elapsedTime.toDouble + "\n")
-      writer.append(java.time.LocalDateTime.now.toString + " Average time per epoch: " + elapsedTime.toDouble / params.get("iterations").toInt+ "\n")
 
       val evaluationPairs = mlr.evaluate(testingDS)
 
@@ -66,9 +63,14 @@ object Test {
 
       var abs = absoluteErrorSum.collect().head
       var testingRows = testingDS.collect().size.toDouble
-      writer.append(java.time.LocalDateTime.now.toString + " ")
-      writer.append("Absolute Error Sum: " + abs + "\n")
+
+      val elapsedTime = System.currentTimeMillis() - startTime
+
+      writer.append(java.time.LocalDateTime.now.toString + " Total elapsed time: " + elapsedTime.toDouble + "\n")
+      writer.append(java.time.LocalDateTime.now.toString + " Average time per epoch: " + elapsedTime.toDouble / params.get("iterations").toInt+ "\n")
+      writer.append(java.time.LocalDateTime.now.toString + " Absolute Error Sum: " + abs + "\n")
       writer.append(java.time.LocalDateTime.now.toString + " Avg Error Sum: " + abs / testingRows + "\n")
+
       //csv line as [sketchOrFlink, par, iter, step, compression, input, dimension, totalTime, timePerEpoch, absoluteError, avgError
       writer.append("CSV_Line: " + params.get("sketchOrFlink") + "," + params.get("parallelism") +
         "," + params.get("iterations") + "," + params.get("stepSize") + "," + params.get("compressionType") +
@@ -76,7 +78,6 @@ object Test {
         "," + elapsedTime.toDouble + "," + (elapsedTime.toDouble / params.get("iterations").toInt) +
         "," + abs + "," + abs/testingRows
         )
-
     }
 
     // parameter "Flink" will run SGD without compression as original Flink SGD
@@ -89,24 +90,26 @@ object Test {
 
       val startTime = System.currentTimeMillis()
       mlr.fit(trainingDS)
-      val elapsedTime = System.currentTimeMillis() - startTime
-      writer.append(java.time.LocalDateTime.now.toString + " Total elapsed time: " + elapsedTime.toDouble + "\n")
-      writer.append(java.time.LocalDateTime.now.toString + " Average time per epoch: " + (elapsedTime.toDouble / params.get("iterations").toInt) + "\n")
+
+      val evaluationPairs = mlr.evaluate(testingDS)
 
       // Calculate the predictions for the test data
       // val predictions: DataSet[(Vector,Double)] = mlr.predict(testingDS)
-      val evaluationPairs = mlr.evaluate(testingDS)
       val absoluteErrorSum = evaluationPairs.map(pair => {
         val (truth, prediction) = pair
         Math.abs(truth - prediction)
       }).reduce((i, k) => i + k)
 
-
       var abs = absoluteErrorSum.collect().head
       var testingRows = testingDS.collect().size.toDouble
-      writer.append(java.time.LocalDateTime.now.toString + " ")
-      writer.append("Absolute Error Sum: " + abs + "\n")
+
+      val elapsedTime = System.currentTimeMillis() - startTime
+
+      writer.append(java.time.LocalDateTime.now.toString + " Total elapsed time: " + elapsedTime.toDouble + "\n")
+      writer.append(java.time.LocalDateTime.now.toString + " Average time per epoch: " + elapsedTime.toDouble / params.get("iterations").toInt+ "\n")
+      writer.append(java.time.LocalDateTime.now.toString + " Absolute Error Sum: " + abs + "\n")
       writer.append(java.time.LocalDateTime.now.toString + " Avg Error Sum: " + abs / testingRows + "\n")
+
       //csv line as [sketchOrFlink, par, iter, step, compression, input, dimension, totalTime, timePerEpoch, absoluteError, avgError
       writer.append("CSV_Line: " + params.get("sketchOrFlink") + "," + params.get("parallelism") +
         "," + params.get("iterations") + "," + params.get("stepSize") + "," + params.get("compressionType") +
