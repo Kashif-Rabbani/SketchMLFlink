@@ -28,16 +28,15 @@ if [ "$#" -ne 12 ]
 then
   usage
 else
-  for (( iterations=$minIterations; iterations<=$maxIterations; iterations+=$iterationsInterval ));
+  for (( parallelism=$minParallelism; parallelism<=$maxParallelism; parallelism+=$parallelismInterval ));
   do
-    echo "> Iterations $iterations"
-    for (( parallelism=$minParallelism; parallelism<=$maxParallelism; parallelism+=$parallelismInterval ));
+    echo "> Running with parallelism $parallelism"
+    for (( dim=$initialDimension; dim<=$finalDimension; dim+=$dimensionInterval ));
       do
-      echo ">>> Parallelism $parallelism"
-      for (( dim=$initialDimension; dim<=$finalDimension; dim+=$dimensionInterval ));
+      echo ">>> Truncating the data to $dim dimensions"
+      for (( iterations=$minIterations; iterations<=$maxIterations; iterations+=$iterationsInterval ));
         do
-          echo ">>>>>> Dimensions $dim"
-          echo ">>>>>> Training file  $trainingFile"
+          echo ">>>>>> Running SGD with $iterations iterations"
           echo "$FLINK_CLUSTER_PATH run $JAR_PATH --inputTrain $TRAINING_DATA_PATH$trainingFile --parallelism $parallelism --iterations $iterations --stepSize "0.5" --compressionType $compression --threshold "0.001" --sketchOrFlink $method --outputPathSketch "sketchMLOutput"$parallelism-$iterations-$trainingFile".txt" --outputPathFlink "flinkOriginalSGDOutput"$parallelism-$iterations-$trainingFile".txt" --maxDim $dim"
           $FLINK_CLUSTER_PATH run $JAR_PATH --inputTrain $TRAINING_DATA_PATH$trainingFile --parallelism $parallelism --iterations $iterations --stepSize "0.5" --compressionType $compression --threshold "0.001" --sketchOrFlink $method --outputPathSketch "sketchMLOutput"$parallelism-$iterations-$trainingFile".txt" --outputPathFlink "flinkOriginalSGDOutput"$parallelism-$iterations-$trainingFile".txt" --maxDim $dim
       done
