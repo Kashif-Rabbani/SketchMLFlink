@@ -63,9 +63,19 @@ object Test {
         val (truth, prediction) = pair
         Math.abs(truth - prediction)
       }).reduce((i, k) => i + k)
+
+      var abs = absoluteErrorSum.collect().head
+      var testingRows = testingDS.collect().size.toDouble
       writer.append(java.time.LocalDateTime.now.toString + " ")
-      writer.append("Absolute Error Sum: " + absoluteErrorSum.collect().head + "\n")
-      writer.append(java.time.LocalDateTime.now.toString + " Avg Error Sum: " + absoluteErrorSum.collect().head / testingDS.collect().size + "\n")
+      writer.append("Absolute Error Sum: " + abs + "\n")
+      writer.append(java.time.LocalDateTime.now.toString + " Avg Error Sum: " + abs / testingRows + "\n")
+      //csv line as [sketchOrFlink, par, iter, step, compression, input, dimension, totalTime, timePerEpoch, absoluteError, avgError
+      writer.append("CSV_Line: " + params.get("sketchOrFlink") + "," + params.get("parallelism") +
+        "," + params.get("iterations") + "," + params.get("stepSize") + "," + params.get("compressionType") +
+        "," + params.get("inputTrain").split("/").last + "," + params.get("maxDim") +
+        "," + elapsedTime.toDouble + "," + (elapsedTime.toDouble / params.get("iterations").toInt) +
+        "," + abs + "," + abs/testingRows
+        )
 
     }
 
@@ -138,7 +148,7 @@ object Test {
           }
         }
       })
-
+    //labelCOODS.map(labelCOO => new LabeledVector(labelCOO._1, SparseVector.fromCOO(maxDim, labelCOO._2)))
     // Calculate maximum dimension of vectors
     val dimensionDS = labelCOODS.map {
       labelCOO =>

@@ -9,9 +9,9 @@ parallelismInterval=$6
 initialDimension=$7
 finalDimension=$8
 dimensionInterval=$9
-trainingFile=$10
-method=$11
-compression=$12
+trainingFile=${10}
+method=${11}
+compression=${12}
 
 TRAINING_DATA_PATH=/share/flink/flink-sketchml-batch/data/training/
 TESTING_DATA_PATH=/share/flink/flink-sketchml-batch/data/testing/
