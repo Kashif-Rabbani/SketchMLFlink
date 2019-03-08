@@ -285,18 +285,15 @@ class SketchGradientDescent extends IterativeSolver {
         //Pair-wise Reduce
         case "Reduce" => {
           compressedGrad.reduce((left, right) => {
-            var count = 0
-            var interceptCount = 0D
+            var count = left._3 + right._3
+            var interceptCount = left._2 + right._2
             val sumSketchGradients = new DenseDoubleGradient(SketchConfig.FEATURES_SIZE)
-            interceptCount += left._2
-            interceptCount += right._2
             if (!left._1.isInstanceOf[ZeroGradient]) {
               sumSketchGradients.plusBy(left._1.toAuto)
             }
             if (!right._1.isInstanceOf[ZeroGradient]) {
               sumSketchGradients.plusBy(right._1.toAuto)
             }
-            count += 2
             (sketch(sumSketchGradients), interceptCount, count)
           }).map(i => {
             val sumSketchGradients = i._1.toAuto.toDense
