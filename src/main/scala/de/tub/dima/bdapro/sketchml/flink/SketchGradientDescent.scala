@@ -211,7 +211,7 @@ class SketchGradientDescent extends IterativeSolver {
     * @return A Dataset containing the weights after one stochastic gradient descent step
     */
   private def SGDStep(
-                       data: DataSet[(LabeledVector)],
+                       data: DataSet[LabeledVector],
                        currentWeights: DataSet[WeightVector],
                        lossFunction: LossFunction,
                        regularizationPenalty: RegularizationPenalty,
@@ -222,7 +222,7 @@ class SketchGradientDescent extends IterativeSolver {
     val startTime = System.currentTimeMillis()
     var featureDim = 0
 
-    data.mapWithBcVariable(currentWeights) { (data, weightVector) =>
+    val compressedGrad = data.mapWithBcVariable(currentWeights) { (data, weightVector) =>
       lossFunction.gradient(data, weightVector) //loss function flink
     }.map(weightVector => {
       weightVector.weights match {
@@ -261,53 +261,82 @@ class SketchGradientDescent extends IterativeSolver {
         }
         (compressedGradient, value._2, 1)
       })
-      .reduceGroup(comressedGradientIter => {
-        var count = 0
-        var interceptCount = 0D
-        val sumSketchGradients = new DenseDoubleGradient(SketchConfig.FEATURES_SIZE)
-        comressedGradientIter.foreach(compressedGrad => {
-          interceptCount += compressedGrad._2
-          if (!compressedGrad._1.isInstanceOf[ZeroGradient]) {
-            sumSketchGradients.plusBy(compressedGrad._1.toAuto)
-          }
-          count += 1
-        })
-        sumSketchGradients.toAuto.toDense
-        val flinkVector = new DenseVector(sumSketchGradients.values)
-        val flinkGradient = WeightVector(flinkVector, interceptCount)
-        (flinkGradient, count)
-      })
-      .mapWithBcVariableIteration(currentWeights) {
-        (gradientCount, weightVector, iteration) => {
-          val (WeightVector(weights, intercept), count) = gradientCount
-          BLAS.scal(1.0 / count, weights)
+    val sumGradient: DataSet[(WeightVector, Int)] =
+      SketchConfig.ReduceOurReduceGroup match {
+        //Collect all gradients into one node
+        case "ReduceGroup" => {
+          compressedGrad.reduceGroup(comressedGradientIter => {
+            var count = 0
+            var interceptCount = 0D
+            val sumSketchGradients = new DenseDoubleGradient(SketchConfig.FEATURES_SIZE)
+            comressedGradientIter.foreach(compressedGrad => {
+              interceptCount += compressedGrad._2
+              if (!compressedGrad._1.isInstanceOf[ZeroGradient]) {
+                sumSketchGradients.plusBy(compressedGrad._1.toAuto)
+              }
+              count += 1
+            })
+            sumSketchGradients.toAuto.toDense
+            val flinkVector = new DenseVector(sumSketchGradients.values)
+            val flinkGradient = WeightVector(flinkVector, interceptCount)
+            (flinkGradient, count)
+          })
+        }
+        //Pair-wise Reduce
+        case "Reduce" => {
+          compressedGrad.reduce((left, right) => {
+            var count = 0
+            var interceptCount = 0D
+            val sumSketchGradients = new DenseDoubleGradient(SketchConfig.FEATURES_SIZE)
+            interceptCount += left._2
+            interceptCount += right._2
+            if (!left._1.isInstanceOf[ZeroGradient]) {
+              sumSketchGradients.plusBy(left._1.toAuto)
+            }
+            if (!right._1.isInstanceOf[ZeroGradient]) {
+              sumSketchGradients.plusBy(right._1.toAuto)
+            }
+            count += 2
+            (sumSketchGradients, interceptCount, count)
+          }).map(i => {
+            val sumSketchGradients = i._1.toAuto.toDense
+            val flinkVector = new DenseVector(sumSketchGradients.values)
+            val flinkGradient = WeightVector(flinkVector, i._2)
+            (flinkGradient, i._3)
+          })
+        }
+      }
+    sumGradient.mapWithBcVariableIteration(currentWeights) {
+      (gradientCount, weightVector, iteration) => {
+        val (WeightVector(weights, intercept), count) = gradientCount
+        BLAS.scal(1.0 / count, weights)
 
-          val gradient = WeightVector(weights, intercept / count)
-          val effectiveLearningRate = learningRateMethod.calculateLearningRate(
-            learningRate,
-            iteration,
-            regularizationConstant)
+        val gradient = WeightVector(weights, intercept / count)
+        val effectiveLearningRate = learningRateMethod.calculateLearningRate(
+          learningRate,
+          iteration,
+          regularizationConstant)
 
-          val newWeights = takeStep(
-            weightVector.weights,
-            gradient.weights,
-            regularizationPenalty,
-            regularizationConstant,
-            effectiveLearningRate)
+        val newWeights = takeStep(
+          weightVector.weights,
+          gradient.weights,
+          regularizationPenalty,
+          regularizationConstant,
+          effectiveLearningRate)
 
-          //Initialize a file object to write the logs
-          logger.debug("Effective Learning Rate: " + effectiveLearningRate + "\n")
+        //Initialize a file object to write the logs
+        logger.debug("Effective Learning Rate: " + effectiveLearningRate + "\n")
 
-          logger.debug("Epoch finished.")
+        logger.debug("Epoch finished.")
 
-          if (iteration == globalNumberOfIterations) {
-            logger.debug(globalNumberOfIterations + " finished.")
-          }
-
-          WeightVector(newWeights, weightVector.intercept - effectiveLearningRate * gradient.intercept)
+        if (iteration == globalNumberOfIterations) {
+          logger.debug(globalNumberOfIterations + " finished.")
         }
 
+        WeightVector(newWeights, weightVector.intercept - effectiveLearningRate * gradient.intercept)
       }
+
+    }
   }
 
   /** Calculates the new weights based on the gradient

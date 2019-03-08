@@ -5,4 +5,5 @@ object SketchConfig {
   var FEATURES_SIZE: Integer = _  //This will be initialized automatically depending on the number of features in the data
   val SKETCH_GROUP_NO: Integer = 2 // Choice of Number of Groups in the Sketch
   val LOG_OUTPUT_PATH: String = "SketchMLFlinkLogs.txt"
+  val ReduceOurReduceGroup: String = "Reduce" //or "ReduceGroup"
 }
