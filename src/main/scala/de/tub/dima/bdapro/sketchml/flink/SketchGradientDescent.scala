@@ -297,7 +297,7 @@ class SketchGradientDescent extends IterativeSolver {
               sumSketchGradients.plusBy(right._1.toAuto)
             }
             count += 2
-            (sumSketchGradients, interceptCount, count)
+            (sketch(sumSketchGradients), interceptCount, count)
           }).map(i => {
             val sumSketchGradients = i._1.toAuto.toDense
             val flinkVector = new DenseVector(sumSketchGradients.values)
