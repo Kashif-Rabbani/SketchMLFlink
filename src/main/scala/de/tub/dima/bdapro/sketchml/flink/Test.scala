@@ -26,6 +26,7 @@ object Test {
 
     // make parameters available in the web interface
     env.getConfig.setGlobalJobParameters(params)
+    SketchConfig.FEATURES_SIZE = params.get("maxDim").toInt
 
     // Obtain training and testing data set
     /*  val trainingDS: DataSet[LabeledVector] = MLUtils.readLibSVM(env, "/home/batuhan/Downloads/kddb/kddb")
