@@ -250,8 +250,8 @@ class SketchGradientDescent extends IterativeSolver {
       .map(value => {
         var compressedGradient: Gradient = null
         value._1 match {
-          case gradient: ZeroGradient =>
-            compressedGradient = gradient
+          case gradient: ZeroGradient => {}
+          //compressedGradient = gradient
 
           case gradient: SparseDoubleGradient =>
             compressedGradient = sketch(gradient)
@@ -270,11 +270,11 @@ class SketchGradientDescent extends IterativeSolver {
             var interceptCount = 0D
             val sumSketchGradients = new DenseDoubleGradient(SketchConfig.FEATURES_SIZE)
             comressedGradientIter.foreach(compressedGrad => {
-              interceptCount += compressedGrad._2
-              if (!compressedGrad._1.isInstanceOf[ZeroGradient]) {
+              if (compressedGrad._1 != null) {
                 sumSketchGradients.plusBy(compressedGrad._1.toAuto)
+                interceptCount += compressedGrad._2
+                count += 1
               }
-              count += 1
             })
             sumSketchGradients.toAuto.toDense
             val flinkVector = new DenseVector(sumSketchGradients.values)
@@ -285,16 +285,23 @@ class SketchGradientDescent extends IterativeSolver {
         //Pair-wise Reduce
         case "Reduce" => {
           compressedGrad.reduce((left, right) => {
-            var count = left._3 + right._3
-            var interceptCount = left._2 + right._2
+            var count = 0
+            var interceptCount = 0D
             val sumSketchGradients = new DenseDoubleGradient(SketchConfig.FEATURES_SIZE)
-            if (left!=null && !left._1.isInstanceOf[ZeroGradient])
+            if (left._1 != null && !left._1.isInstanceOf[ZeroGradient]) {
               sumSketchGradients.plusBy(left._1.toAuto)
-            if (right!=null && !right._1.isInstanceOf[ZeroGradient])
+              interceptCount += left._2
+              count += left._3
+            }
+            if (right._1 != null && !right._1.isInstanceOf[ZeroGradient]) {
               sumSketchGradients.plusBy(right._1.toAuto)
-            if (sumSketchGradients.values.size==0)
-              null
-            (sketch(sumSketchGradients), interceptCount, count)
+              interceptCount += right._2
+              count += right._3
+            }
+            if (sumSketchGradients.countNNZ == 0)
+              (null, interceptCount, count)
+            else
+              (sketch(sumSketchGradients), interceptCount, count)
           }).map(i => {
             val sumSketchGradients = i._1.toAuto.toDense
             val flinkVector = new DenseVector(sumSketchGradients.values)
