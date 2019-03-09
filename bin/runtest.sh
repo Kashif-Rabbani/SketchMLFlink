@@ -31,7 +31,7 @@ else
   for (( parallelism=$minParallelism; parallelism<=$maxParallelism; parallelism+=$parallelismInterval ));
   do
     echo "> Running with parallelism $parallelism"
-    for (( dim=$initialDimension; dim<=$finalDimension; dim+=$dimensionInterval ));
+    for (( dim=$initialDimension; dim<=$finalDimension; dim*=$dimensionInterval ));
       do
       echo ">>> Truncating the data to $dim dimensions"
       for (( iterations=$minIterations; iterations<=$maxIterations; iterations+=$iterationsInterval ));
