@@ -29,11 +29,6 @@ object Test {
     SketchConfig.FEATURES_SIZE = params.get("maxDim").toInt
     SketchConfig.COMPRESSION_TYPE = params.get("compressionType")
 
-    // Obtain training and testing data set
-    /*  val trainingDS: DataSet[LabeledVector] = MLUtils.readLibSVM(env, "/home/batuhan/Downloads/kddb/kddb")
-        val astroTestingDS: DataSet[LabeledVector] = MLUtils.readLibSVM(env, "/home/batuhan/Downloads/kddb/kddb.t")
-        val testingDS : DataSet[Vector] = astroTestingDS.map(lv => lv.vector)*/
-
     val writer = new PrintWriter(new FileOutputStream(new File(SketchConfig.LOG_OUTPUT_PATH), true))
 
     writer.append("\n" + java.time.LocalDateTime.now.toString + " Experiment Started for " + params.get("sketchOrFlink") + ". " + "Parallelism " + params.get("parallelism") +
@@ -123,6 +118,11 @@ object Test {
     writer.close()
   }
 
+
+
+  /*
+  Read function extending the reading capabilities of FlinkML.MLutils but customizing the number of dimensions to read
+   */
   def readLibSVMDimension(env: ExecutionEnvironment, filePath: String, maxDim: Int): DataSet[LabeledVector] = {
     val labelCOODS = env.readTextFile(filePath).flatMap(
       new RichFlatMapFunction[String, (Double, Array[(Int, Double)])] {
@@ -153,7 +153,6 @@ object Test {
           }
         }
       })
-    //labelCOODS.map(labelCOO => new LabeledVector(labelCOO._1, SparseVector.fromCOO(maxDim, labelCOO._2)))
     // Calculate maximum dimension of vectors
     val dimensionDS = labelCOODS.map {
       labelCOO =>
@@ -173,7 +172,6 @@ object Test {
         }
       }
     }.withBroadcastSet(dimensionDS, "dim")
-
 
   }
 

@@ -52,7 +52,7 @@ import org.slf4j.{Logger, LoggerFactory}
   * effective learning rate.
   */
 class FlinkGradientDescent extends IterativeSolver {
-  private val logger: Logger = LoggerFactory.getLogger(SketchGradientDescent.getClass)
+  private val logger: Logger = LoggerFactory.getLogger(FlinkGradientDescent.getClass)
   private var totalTimeToTrack = 0.0
   private var globalNumberOfIterations: Int = parameters(Iterations)
 

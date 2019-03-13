@@ -1,29 +1,11 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
+package de.tub.dima.bdapro.sketchml.flink
 
-package org.apache.flink.ml.optimization
-
-import de.tub.dima.bdapro.sketchml.flink.SketchConfig
 import org.apache.flink.api.scala._
 import org.apache.flink.ml._
 import org.apache.flink.ml.common._
 import org.apache.flink.ml.math._
+import org.apache.flink.ml.optimization._
 import org.apache.flink.ml.optimization.IterativeSolver._
 import org.apache.flink.ml.optimization.LearningRateMethod.LearningRateMethodTrait
 import org.apache.flink.ml.optimization.Solver._
@@ -36,26 +18,14 @@ import org.dma.sketchml.sketch.sketch.frequency.{GroupedMinMaxSketch, MinMaxSket
 import org.slf4j.{Logger, LoggerFactory}
 
 
-/** Base class which performs Stochastic Gradient Descent optimization using mini batches.
+/** Base class performing Stochastic Gradient Descent optimization based in FlinkML implementation
   *
   * For each labeled vector in a mini batch the gradient is computed and added to a partial
   * gradient. The partial gradients are then summed and divided by the size of the batches. The
   * average gradient is then used to updated the weight values, including regularization.
   *
-  * At the moment, the whole partition is used for SGD, making it effectively a batch gradient
-  * descent. Once a sampling operator has been introduced, the algorithm can be optimized
-  *
-  * The parameters to tune the algorithm are:
-  * [[Solver.LossFunction]] for the loss function to be used,
-  * [[Solver.RegularizationPenaltyValue]] for the regularization penalty.
-  * [[Solver.RegularizationConstant]] for the regularization parameter,
-  * [[IterativeSolver.Iterations]] for the maximum number of iteration,
-  * [[IterativeSolver.LearningRate]] for the learning rate used.
-  * [[IterativeSolver.ConvergenceThreshold]] when provided the algorithm will
-  * stop the iterations if the relative change in the value of the objective
-  * function between successive iterations is is smaller than this value.
-  * [[IterativeSolver.LearningRateMethodValue]] determines functional form of
-  * effective learning rate.
+  * The configuration allows the algorithms to switch between a pair-wise (left-fold) reduce operation
+  * or a group reduce operation
   */
 class SketchGradientDescent extends IterativeSolver {
   private val logger: Logger = LoggerFactory.getLogger(SketchGradientDescent.getClass)
@@ -364,7 +334,7 @@ class SketchGradientDescent extends IterativeSolver {
 
   /** Calculates Sketch of the given gradient by compression
     *
-    * @param gradient
+    * @param gradient The gradient according to which we will update the weights
     * @return
     */
   private def sketch(gradient: Gradient): Gradient = {
@@ -379,8 +349,8 @@ class SketchGradientDescent extends IterativeSolver {
 
   /** Count the number of non-zero values in an array of double values
     *
-    * @param dim
-    * @param values
+    * @param dim  Dimensionality of the data
+    * @param values An array of doubles representing the data
     * @return
     */
   private def countNNZ(dim: Int, values: Array[Double]): Int = {
@@ -422,20 +392,5 @@ object SketchGradientDescent {
   def apply() = new SketchGradientDescent
 }
 
-/*
-class changeFlinkGradientToSketchMLGradient extends MapFunction[WeightVector, (Gradient, Double)] {
-  def map(value: WeightVector): (Gradient, Double) = {
-    val result = value.weights match {
-      case d: DenseVector => d
-      case s: SparseVector => s.toDenseVector
-    }
-    val sketchGradient = new DenseDoubleGradient(result.size)
-    for (r <- result) {
-      sketchGradient.values :+ r._2
-    }
-    (sketchGradient, value.intercept)
-  }
-}
-*/
 
 
